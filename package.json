@@ -1,1 +1,18 @@
-{"name":"relay-crm","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node server.js","dev":"node --watch server.js","test":"node --test"},"engines":{"node":">=24"}}
+{
+  "name": "relay-crm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js",
+    "test": "node --env-file-if-exists=.env --test",
+    "db:import-sqlite": "node --env-file-if-exists=.env scripts/import-sqlite.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}
