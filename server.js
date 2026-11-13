@@ -16,11 +16,17 @@ if (!db.prepare('SELECT count(*) n FROM conversations').get().n) {
  const p=db.prepare('INSERT INTO products VALUES(?,?,?,?,?,?,?)');
  [[1,'Everyday Tote','Accessories',48,24,'👜','#f0eee3'],[2,'Studio Headphones','Electronics',129,18,'🎧','#ece8f6'],[3,'Ceramic Mug','Home & living',22,56,'☕','#f3e6df'],[4,'Desk Lamp','Home & living',85,7,'💡','#e6eddf']].forEach(r=>p.run(...r));
 }
+db.exec('CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY,product_id INTEGER,quantity INTEGER,unit_price REAL,unit_cost REAL,channel TEXT,status TEXT,date TEXT)');
+if(!db.prepare('SELECT count(*) n FROM orders').get().n){
+ const samples=JSON.parse(readFileSync(path.join(root,'public/demo-data.json'),'utf8')).overview.orders;
+ const insert=db.prepare('INSERT INTO orders VALUES(?,?,?,?,?,?,?,?)');
+ for(const o of samples)insert.run(o.id,o.product_id,o.quantity,o.unit_price,o.unit_cost,o.channel,o.status,o.date);
+}
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
 export const server=http.createServer(async(req,res)=>{
  try {
  const url=new URL(req.url,'http://localhost'); const route=url.pathname;
- if(route==='/api/overview' && req.method==='GET')return json(res,200,{conversations:db.prepare('SELECT * FROM conversations').all(),products:db.prepare('SELECT * FROM products').all(),workspace:'Olive & Co.',demo:true});
+ if(route==='/api/overview' && req.method==='GET')return json(res,200,{conversations:db.prepare('SELECT * FROM conversations').all(),products:db.prepare('SELECT * FROM products').all(),orders:db.prepare('SELECT * FROM orders').all(),workspace:'Olive & Co.',demo:true});
  const match=route.match(/^\/api\/conversations\/(\d+)(\/messages)?$/);
  if(match){const id=Number(match[1]);if(!db.prepare('SELECT id FROM conversations WHERE id=?').get(id))return json(res,404,{error:'Conversation not found'});
  if(req.method==='GET')return json(res,200,db.prepare('SELECT * FROM messages WHERE conversation_id=? ORDER BY id').all(id));
@@ -28,7 +34,7 @@ export const server=http.createServer(async(req,res)=>{
  if(req.method==='PATCH'&&!match[2]){let body='';for await(const c of req){body+=c;if(body.length>1000)return json(res,413,{error:'Request too large'});}let p;try{p=JSON.parse(body);}catch{return json(res,400,{error:'Invalid JSON'});}if(!['Needs reply','AI handling','Converted','Inactive'].includes(p.status))return json(res,400,{error:'Invalid status'});db.prepare('UPDATE conversations SET status=? WHERE id=?').run(p.status,id);return json(res,200,{ok:true});}}
  if(route.startsWith('/api/'))return json(res,404,{error:'Not found'});
  if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
- const files={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
+ const files={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
  }catch(e){console.error(e);json(res,500,{error:'Something went wrong'});}
 });
 if(process.env.NODE_ENV!=='test')server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('Relay CRM listening on port '+(process.env.PORT||3000)));

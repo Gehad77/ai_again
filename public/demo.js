@@ -4,6 +4,7 @@ async function load(){
  if(data)return data;
  try{const saved=localStorage.getItem(storageKey);if(saved)data=JSON.parse(saved);}catch{}
  if(!data){const r=await fetch(new URL('./demo-data.json',import.meta.url));if(!r.ok)throw Error('Unable to load preview data');data=await r.json();}
+ if(!data.overview.orders){const fresh=await(await fetch(new URL('./demo-data.json',import.meta.url))).json();data.overview.orders=fresh.overview.orders;}
  return data;
 }
 function save(){try{localStorage.setItem(storageKey,JSON.stringify(data));}catch{throw Error('Browser storage unavailable. Changes last for this visit only.');}}
