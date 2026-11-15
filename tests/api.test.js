@@ -40,3 +40,27 @@ test('owner access, product creation and transactional order stock',async()=>{
  const logout=await rawFetch(base+'/api/auth/signout',{method:'POST',headers:{cookie:login.headers.get('set-cookie').split(';')[0]}});assert.equal(logout.status,200);
  assert.equal((await rawFetch(base+'/api/overview',{headers:{cookie:login.headers.get('set-cookie').split(';')[0]}})).status,401);
 });
+
+test('customer chat orders are private, priced by server, and confirmed once',async()=>{
+ const request=(path,data,cookie)=>rawFetch(base+'/api/shop/'+path,{method:data?'POST':'GET',headers:cookie?{cookie}:{},...(data?{body:JSON.stringify(data)}:{})});
+ assert.equal((await request('chat')).status,401);
+ const signup=await request('signup',{name:'Alex Buyer',email:'buyer@example.com',password:'customer-password-123'});assert.equal(signup.status,200);const buyerCookie=signup.headers.get('set-cookie').split(';')[0];
+ assert.equal((await rawFetch(base+'/api/overview',{headers:{cookie:buyerCookie}})).status,401);
+ const signup2=await request('signup',{name:'Other Buyer',email:'other-buyer@example.com',password:'customer-password-123'});const otherCookie=signup2.headers.get('set-cookie').split(';')[0];
+ const login=await request('signin',{email:'buyer@example.com',password:'customer-password-123'});assert.equal(login.status,200);
+ assert.equal((await request('chat',{body:'Can I order this product?'},buyerCookie)).status,201);
+ const prod=await(await fetch(base+'/api/products',{method:'POST',body:JSON.stringify({name:'Chat product',category:'Test',price:12.5,stock:4})})).json();
+ const payload={product_id:prod.id,quantity:2,unit_price:0.01,status:'Paid',request_key:'customer-order-request-123'};
+ const r=await request('orders',payload,buyerCookie);assert.equal(r.status,201);const {id}=await r.json();
+ assert.equal((await request('orders',payload,buyerCookie)).status,200);
+ const chat=await(await request('chat',null,buyerCookie)).json();assert.equal(chat.orders.length,1);assert.equal(chat.orders[0].unit_price,12.5);assert.equal(chat.orders[0].status,'Pending');assert(chat.messages.some(m=>m.body.includes('Can I order')));
+ const otherChat=await(await request('chat',null,otherCookie)).json();assert.equal(otherChat.orders.length,0);assert(!otherChat.messages.some(m=>m.body.includes('Can I order')));
+ let overview=await(await fetch(base+'/api/overview')).json();const conv=overview.orders.find(o=>o.id===id).conversation_id;assert.equal(overview.products.find(p=>p.id===prod.id).stock,4);
+ await fetch(base+`/api/conversations/${conv}/messages`,{method:'POST',body:JSON.stringify({body:'We have your order!'})});assert((await(await request('chat',null,buyerCookie)).json()).messages.some(m=>m.body==='We have your order!'));
+ assert.equal((await rawFetch(base+`/api/orders/${id}/confirm`,{method:'POST',headers:{cookie:buyerCookie},body:JSON.stringify({unit_cost:5})})).status,401);
+ assert.equal((await fetch(base+`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost:5})})).status,200);
+ assert.equal((await fetch(base+`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost:5})})).status,400);
+ overview=await(await fetch(base+'/api/overview')).json();assert.equal(overview.products.find(p=>p.id===prod.id).stock,2);assert.equal(overview.orders.find(o=>o.id===id).status,'Paid');
+ assert.equal((await request('orders',{...payload,quantity:9,request_key:'customer-order-request-456'},buyerCookie)).status,400);
+ assert.equal((await request('signout',{},buyerCookie)).status,200);assert.equal((await request('chat',null,buyerCookie)).status,401);
+});
