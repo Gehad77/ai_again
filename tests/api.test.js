@@ -10,6 +10,12 @@ process.env.DATABASE_URL=testUrl.toString();process.env.NODE_ENV='test';process.
 const {server,close}=await import('../server.js');
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
+const rawFetch=globalThis.fetch;
+assert.equal((await rawFetch(base+'/api/overview')).status,401);
+const setup=await rawFetch(base+'/api/auth/setup',{method:'POST',body:JSON.stringify({email:'owner@example.com',password:'test-password-12345'})});
+assert.equal(setup.status,200);
+const cookie=setup.headers.get('set-cookie').split(';')[0];
+const fetch=(url,options={})=>rawFetch(url,{...options,headers:{...options.headers,cookie}});
 after(async()=>{await close();await admin.query(`DROP SCHEMA ${schema} CASCADE`);await admin.end();});
 test('workspace returns seeded conversations and inventory',async()=>{const r=await fetch(base+'/api/overview');assert.equal(r.status,200);const d=await r.json();assert.equal(d.conversations.length,6);assert.equal(d.products.length,4);assert.equal(d.demo,true);});
 test('reply persists and conversion status updates',async()=>{let r=await fetch(base+'/api/conversations/1/messages',{method:'POST',body:JSON.stringify({body:'Olive is available. Would you like to order?'})});assert.equal(r.status,201);let msgs=await(await fetch(base+'/api/conversations/1')).json();assert.equal(msgs.at(-1).role,'agent');assert.match(msgs.at(-1).body,/Olive/);r=await fetch(base+'/api/conversations/1',{method:'PATCH',body:JSON.stringify({status:'Converted'})});assert.equal(r.status,200);const d=await(await fetch(base+'/api/overview')).json();assert.equal(d.conversations[0].status,'Converted');});
@@ -17,3 +23,20 @@ test('rejects invalid payloads and missing conversations',async()=>{for(const bo
 test('frontend and assets are served',async()=>{for(const path of ['/','/app.js','/style.css'])assert.equal((await fetch(base+path)).status,200);assert.equal((await fetch(base+'/server.js')).status,404);});
 
 test('reinitializing PostgreSQL preserves replies and statuses',async()=>{const {initialize}=await import('../db.js');await initialize();const messages=await(await fetch(base+'/api/conversations/1')).json();assert.equal(messages.at(-1).role,'agent');const overview=await(await fetch(base+'/api/overview')).json();assert.equal(overview.conversations[0].status,'Converted');assert.equal(overview.orders.length,8);assert.equal(typeof overview.products[0].price,'number');});
+
+test('owner access, product creation and transactional order stock',async()=>{
+ assert.equal((await rawFetch(base+'/api/products',{method:'POST',body:'{}'})).status,401);
+ assert.equal((await rawFetch(base+'/api/auth/signin',{method:'POST',body:JSON.stringify({email:'owner@example.com',password:'wrong-password-123'})})).status,401);
+ const login=await rawFetch(base+'/api/auth/signin',{method:'POST',body:JSON.stringify({email:'owner@example.com',password:'test-password-12345'})});assert.equal(login.status,200);
+ assert.equal((await fetch(base+'/api/auth/setup',{method:'POST',body:JSON.stringify({email:'other@example.com',password:'test-password-12345'})})).status,409);
+ assert.equal((await fetch(base+'/api/products',{method:'POST',body:JSON.stringify({name:'Invalid',category:'Test',price:-1,stock:2})})).status,400);
+ const r=await fetch(base+'/api/products',{method:'POST',body:JSON.stringify({name:'New tote',category:'Bags',price:25,stock:3})});assert.equal(r.status,201);const p=await r.json();
+ const order={product_id:p.id,quantity:2,unit_price:25,unit_cost:10,channel:'WhatsApp',status:'Paid'};
+ assert.equal((await fetch(base+'/api/orders',{method:'POST',body:JSON.stringify(order)})).status,201);
+ assert.equal((await fetch(base+'/api/orders',{method:'POST',body:JSON.stringify(order)})).status,400);
+ order.status='Pending';assert.equal((await fetch(base+'/api/orders',{method:'POST',body:JSON.stringify(order)})).status,201);
+ const overview=await(await fetch(base+'/api/overview')).json();assert.equal(overview.products.find(x=>x.id===p.id).stock,1);assert.equal(overview.orders.filter(x=>x.product_id===p.id).length,2);
+ assert.equal((await fetch(base+'/api/products',{method:'POST',headers:{Origin:'https://evil.example'},body:'{}'})).status,403);
+ const logout=await rawFetch(base+'/api/auth/signout',{method:'POST',headers:{cookie:login.headers.get('set-cookie').split(';')[0]}});assert.equal(logout.status,200);
+ assert.equal((await rawFetch(base+'/api/overview',{headers:{cookie:login.headers.get('set-cookie').split(';')[0]}})).status,401);
+});

@@ -10,6 +10,9 @@ async function load(){
 function save(){try{localStorage.setItem(storageKey,JSON.stringify(data));}catch{throw Error('Browser storage unavailable. Changes last for this visit only.');}}
 export async function demoApi(url,options={}){
  const d=await load();const method=options.method||'GET';
+ if(url==='/api/auth/signout'){sessionStorage.removeItem('relay-demo-session');return {ok:true};}
+ if(url==='/api/products'&&method==='POST'){const p=JSON.parse(options.body);p.id=Math.max(0,...d.overview.products.map(p=>p.id))+1;p.emoji='◇';p.color='#e5eee6';d.overview.products.push(p);save();return p;}
+ if(url==='/api/orders'&&method==='POST'){const p=JSON.parse(options.body);const product=d.overview.products.find(x=>x.id===p.product_id);if(!product)throw Error('Choose a product.');if(p.status==='Paid'&&product.stock<p.quantity)throw Error('Not enough stock for this paid order.');if(p.status==='Paid')product.stock-=p.quantity;p.id=Math.max(0,...d.overview.orders.map(o=>o.id))+1;p.date=new Date().toISOString();d.overview.orders.push(p);save();return p;}
  if(url==='/api/overview')return structuredClone(d.overview);
  const match=url.match(/^\/api\/conversations\/(\d+)(\/messages)?$/);
  if(!match)throw Error('Not available in preview');

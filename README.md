@@ -28,7 +28,7 @@ The server listens on port 3000 (override with `PORT`). `npm run dev` enables se
 
 This is a single-workspace design prototype, not a production SaaS. All customers, stock, and messages are samples. The dashboard's seven-day activity chart is illustrative. Inbox replies persist locally but are not sent externally. Sample AI responses and classifications are seeded; no LLM is connected. Overview cards and analytics read current conversation status.
 
-Before production: implement authentication, tenant-scoped authorization and data isolation, secure sessions, rate limits, audit logs, Meta OAuth/webhooks and signature validation, consent and retention controls, real order/payment reconciliation, LLM integration, and subscription billing. Never expose this unauthenticated demo to sensitive customer data. Meta connections require each business's authorization and applicable review. Google Fonts is optional; system fonts work offline.
+Before production: extend owner authentication with account recovery and login rate limits, tenant-scoped authorization and data isolation, secure sessions, rate limits, audit logs, Meta OAuth/webhooks and signature validation, consent and retention controls, real order/payment reconciliation, LLM integration, and subscription billing. Never expose this unauthenticated demo to sensitive customer data. Meta connections require each business's authorization and applicable review. Google Fonts is optional; system fonts work offline.
 
 ## GitHub Pages interactive preview
 
@@ -40,7 +40,7 @@ On GitHub Pages, the app uses sample JSON and browser local storage instead of t
 
 Analytics now includes current stock, paid units sold, paid item revenue, gross profit from recorded line costs, paid order count, average paid order value, current retail stock value, and low-stock warnings (10 units or fewer). Product and channel breakdowns reconcile to the sample order ledger; CSV export respects sales period/channel filters. Current inventory remains global regardless of sales filters. Inquiry, price concern, and inactive-chat counts use all conversation history for the selected channel because chat timestamps are not yet recorded.
 
-Order fixtures are dated November 4–13, 2026. Paid order totals exclude pending, cancelled, and refunded records. This prototype does not model refund cash flow, stock movements, shipping, taxes, or operating expenses. Chat status changes do not create orders or update stock. An initial sample order ledger is seeded only when `SEED_DEMO=1`; GitHub Pages users keep their local replies and statuses while receiving the new sample ledger.
+Order fixtures are dated November 4–13, 2026. Paid order totals exclude pending, cancelled, and refunded records. This prototype does not model refund cash flow, full stock movement history, shipping, taxes, or operating expenses. Chat status changes do not create orders or update stock. An initial sample order ledger is seeded only when `SEED_DEMO=1`; GitHub Pages users keep their local replies and statuses while receiving the new sample ledger.
 
 
 ## PostgreSQL connection and existing data
@@ -50,3 +50,11 @@ The local database is named `relay_crm`, on `127.0.0.1:5432`, with user `relay`.
 To import the old SQLite database into an empty PostgreSQL destination, disable `SEED_DEMO` and run `npm run db:import-sqlite -- /absolute/path/to/crm.sqlite`. The import is transactional, preserves IDs and messages, refuses a populated destination, and leaves the original SQLite file untouched. Once imported, leave `SEED_DEMO=0`. Demo seed initialization is repeatable without overwriting existing records. API tests use a temporary PostgreSQL schema and clean up only that schema; the configured database user needs schema creation permission. `node --test tests/analytics.test.js` runs database-independent analytics tests.
 
 For a hosted database, create a PostgreSQL project in your own Neon, Supabase, or other provider account. Set its connection URL securely as `DATABASE_URL` on a backend hosting service (never in GitHub Pages JavaScript). Use the provider's documented TLS settings with certificate verification enabled; do not disable verification. The provider supplies a private connection URL and a separate browser dashboard URL. No hosted account or hosted database has been provisioned by this repository. GitHub Pages continues to serve the browser-only preview; deploying this backend is a separate step.
+
+## Owner sign-in, products, and orders
+
+On the backend, the first visit prompts you to create the single workspace owner account (email and a password of 12–128 characters). Later visits use sign-in; sign-out revokes the current session. Passwords use salted scrypt hashes, and seven-day sessions use HttpOnly, SameSite cookies. Use HTTPS and NODE_ENV=production for secure cookies when deploying. Account recovery and multiple user accounts are not yet supported. Initialize the owner before exposing a new instance publicly.
+
+Use **Add product** on the dashboard or Products page to enter a name, category, price, and stock. Use **Add order** on the dashboard or Analytics page to choose a product, quantity, selling price, cost, channel, and status. Orders receive the current timestamp. Paid orders atomically reduce stock and reject insufficient inventory; other statuses do not change stock. The order ledger and analytics refresh after saving. Existing seeded ledger entries do not retroactively deduct stock.
+
+GitHub Pages and `?demo=1` offer an explicitly labeled demo entry screen instead of real authentication. Product and order changes in this mode stay in browser storage. Real sign-in and PostgreSQL persistence require the Node backend. Workspace API access requires a signed-in owner.
