@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {businessRoutes,recordSale} from './business.js';
 import {customerRoutes} from './customer.js';
 import {randomBytes,scrypt as derive,timingSafeEqual,createHash} from 'node:crypto';
 import {promisify} from 'node:util';
@@ -42,21 +43,29 @@ export const server=http.createServer(async(req,res)=>{
  if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
  }
- if(route==='/api/products'&&req.method==='POST'){
- const p=await body(req);
- if(typeof p.name!=='string'||!p.name.trim()||p.name.length>120||typeof p.category!=='string'||!p.category.trim()||p.category.length>80||typeof p.price!=='number'||!Number.isFinite(p.price)||p.price<0||p.price>9999999999.99||!Number.isSafeInteger(p.stock)||p.stock<0||p.stock>2147483647)invalid('Enter a name, category, valid price and whole-number stock.');
- const result=await pool.query("INSERT INTO products VALUES(nextval('product_ids'),$1,$2,$3,$4,'◇','#e5eee6') RETURNING *",[p.name.trim(),p.category.trim(),p.price,p.stock]);return json(res,201,result.rows[0]);
- }
+ await businessRoutes(req,res,route,{body,invalid,json});
+ if(res.writableEnded)return;
  if(route==='/api/orders'&&req.method==='POST'){
  const p=await body(req);
  if(!Number.isSafeInteger(p.product_id)||!Number.isSafeInteger(p.quantity)||p.quantity<1||p.quantity>2147483647||![p.unit_price,p.unit_cost].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=9999999999.99)||!['WhatsApp','Instagram','Messenger','Website'].includes(p.channel)||!['Paid','Pending','Cancelled','Refunded'].includes(p.status))invalid('Enter valid order details.');
- const c=await pool.connect();try{await c.query('BEGIN');if(p.conversation_id!==undefined&&(!Number.isSafeInteger(p.conversation_id)||!(await c.query('SELECT id FROM conversations WHERE id=$1',[p.conversation_id])).rowCount))invalid('Choose an existing conversation.');const product=(await c.query('SELECT * FROM products WHERE id=$1 FOR UPDATE',[p.product_id])).rows[0];if(!product)invalid('Choose an existing product.');if(p.status==='Paid'){if(product.stock<p.quantity)invalid('Not enough stock for this paid order.');await c.query('UPDATE products SET stock=stock-$1 WHERE id=$2',[p.quantity,p.product_id]);}
- const result=await c.query("INSERT INTO orders VALUES(nextval('order_ids'),$1,$2,$3,$4,$5,$6,NOW()) RETURNING *",[p.product_id,p.quantity,p.unit_price,p.unit_cost,p.channel,p.status]);if(p.conversation_id!==undefined){await c.query('INSERT INTO conversation_orders VALUES($1,$2,$3)',[result.rows[0].id,p.conversation_id,randomBytes(24).toString('hex')]);await c.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'agent',$2)",[p.conversation_id,`Order #${result.rows[0].id}: ${p.quantity} × ${product.name}, total $${(p.quantity*p.unit_price).toFixed(2)}. Status: ${p.status}.`]);}await c.query('COMMIT');return json(res,201,result.rows[0]);}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+ const c=await pool.connect();try{await c.query('BEGIN');if(p.conversation_id!==undefined&&(!Number.isSafeInteger(p.conversation_id)||!(await c.query('SELECT id FROM conversations WHERE id=$1',[p.conversation_id])).rowCount))invalid('Choose an existing conversation.');const product=(await c.query('SELECT * FROM products WHERE id=$1 FOR UPDATE',[p.product_id])).rows[0];if(!product)invalid('Choose an existing product.');if(p.status==='Paid'){if(product.stock<p.quantity)invalid('Not enough stock for this paid order.');}
+ const result=await c.query("INSERT INTO orders(id,product_id,quantity,unit_price,unit_cost,channel,status,date,paid_at) VALUES(nextval('order_ids'),$1,$2,$3,$4,$5,$6,NOW(),CASE WHEN $6='Paid' THEN NOW() END) RETURNING *",[p.product_id,p.quantity,p.unit_price,p.unit_cost,p.channel,p.status]);if(p.status==='Paid')await recordSale(c,result.rows[0],product);if(p.conversation_id!==undefined){await c.query('INSERT INTO conversation_orders VALUES($1,$2,$3)',[result.rows[0].id,p.conversation_id,randomBytes(24).toString('hex')]);await c.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'agent',$2)",[p.conversation_id,`Order #${result.rows[0].id}: ${p.quantity} × ${product.name}, total $${(p.quantity*p.unit_price).toFixed(2)}. Status: ${p.status}.`]);}await c.query('COMMIT');return json(res,201,result.rows[0]);}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }
- if(route==='/api/overview' && req.method==='GET')return json(res,200,{conversations:(await pool.query('SELECT * FROM conversations ORDER BY id')).rows,products:(await pool.query('SELECT * FROM products ORDER BY id')).rows,orders:(await pool.query('SELECT o.*,co.conversation_id FROM orders o LEFT JOIN conversation_orders co ON co.order_id=o.id ORDER BY o.id')).rows,workspace:'Olive & Co.',demo:process.env.SEED_DEMO==='1'});
+ if(route==='/api/overview' && req.method==='GET'){
+  const {rows:[data]}=await pool.query(`SELECT
+   COALESCE((SELECT json_agg(c ORDER BY c.id) FROM conversations c), '[]') AS conversations,
+   COALESCE((SELECT json_agg(p ORDER BY p.id) FROM products p), '[]') AS products,
+   COALESCE((SELECT json_agg(linked ORDER BY linked.id) FROM (
+    SELECT o.*,co.conversation_id FROM orders o LEFT JOIN conversation_orders co ON co.order_id=o.id
+   ) linked), '[]') AS orders,
+   COALESCE((SELECT json_agg(m ORDER BY m.id DESC) FROM stock_movements m), '[]') AS movements,
+   COALESCE((SELECT json_agg(e ORDER BY e.date DESC,e.id DESC) FROM operating_expenses e), '[]') AS expenses,
+   COALESCE((SELECT json_agg(t) FROM sales_targets t), '[]') AS targets`);
+  return json(res,200,{...data,workspace:'Olive & Co.',demo:process.env.SEED_DEMO==='1'});
+ }
  if(route.match(/^\/api\/orders\/\d+\/confirm$/)&&req.method==='POST'){
  const id=Number(route.split('/')[3]);const p=await body(req);if(typeof p.unit_cost!=='number'||!Number.isFinite(p.unit_cost)||p.unit_cost<0||p.unit_cost>9999999999.99)invalid('Enter a valid unit cost.');
- const c=await pool.connect();try{await c.query('BEGIN');const order=(await c.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE',[id])).rows[0];if(!order||order.status!=='Pending')invalid('This order is no longer pending.');const product=(await c.query('SELECT * FROM products WHERE id=$1 FOR UPDATE',[order.product_id])).rows[0];if(product.stock<order.quantity)invalid('Not enough stock to confirm payment.');await c.query('UPDATE products SET stock=stock-$1 WHERE id=$2',[order.quantity,product.id]);await c.query("UPDATE orders SET status='Paid',unit_cost=$1 WHERE id=$2",[p.unit_cost,id]);const link=(await c.query('SELECT conversation_id FROM conversation_orders WHERE order_id=$1',[id])).rows[0];if(link){await c.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'agent',$2)",[link.conversation_id,`Payment confirmed for order #${id}. Thank you!`]);await c.query("UPDATE conversations SET status='Converted' WHERE id=$1",[link.conversation_id]);}await c.query('COMMIT');return json(res,200,{ok:true});}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+ const c=await pool.connect();try{await c.query('BEGIN');const order=(await c.query('SELECT * FROM orders WHERE id=$1 FOR UPDATE',[id])).rows[0];if(!order||order.status!=='Pending')invalid('This order is no longer pending.');const product=(await c.query('SELECT * FROM products WHERE id=$1 FOR UPDATE',[order.product_id])).rows[0];if(product.stock<order.quantity)invalid('Not enough stock to confirm payment.');await c.query("UPDATE orders SET status='Paid',unit_cost=$1,paid_at=NOW() WHERE id=$2",[p.unit_cost,id]);await recordSale(c,{...order,unit_cost:p.unit_cost},product);const link=(await c.query('SELECT conversation_id FROM conversation_orders WHERE order_id=$1',[id])).rows[0];if(link){await c.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'agent',$2)",[link.conversation_id,`Payment confirmed for order #${id}. Thank you!`]);await c.query("UPDATE conversations SET status='Converted' WHERE id=$1",[link.conversation_id]);}await c.query('COMMIT');return json(res,200,{ok:true});}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }
  const match=route.match(/^\/api\/conversations\/(\d+)(\/messages)?$/);
  if(match){const id=Number(match[1]);if(!(await pool.query('SELECT id FROM conversations WHERE id=$1',[id])).rowCount)return json(res,404,{error:'Conversation not found'});
@@ -65,7 +74,7 @@ export const server=http.createServer(async(req,res)=>{
  if(req.method==='PATCH'&&!match[2]){let body='';for await(const c of req){body+=c;if(body.length>1000)return json(res,413,{error:'Request too large'});}let p;try{p=JSON.parse(body);}catch{return json(res,400,{error:'Invalid JSON'});}if(!['Needs reply','AI handling','Converted','Inactive'].includes(p.status))return json(res,400,{error:'Invalid status'});await pool.query('UPDATE conversations SET status=$1 WHERE id=$2',[p.status,id]);return json(res,200,{ok:true});}}
  if(route.startsWith('/api/'))return json(res,404,{error:'Not found'});
  if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
- const files={'/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
+ const files={'/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
  }catch(e){console.error('Request failed:',e.code||e.name);json(res,e.status||500,{error:e.status?e.message:'Something went wrong'});}
 });
 if(process.env.NODE_ENV!=='test')server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('Relay CRM listening on port '+(process.env.PORT||3000)));

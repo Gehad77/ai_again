@@ -26,7 +26,7 @@ The server listens on port 3000 (override with `PORT`). `npm run dev` enables se
 
 ## Prototype boundaries
 
-This is a single-workspace design prototype, not a production SaaS. All customers, stock, and messages are samples. The dashboard's seven-day activity chart is illustrative. Inbox replies persist locally but are not sent externally. Sample AI responses and classifications are seeded; no LLM is connected. Overview cards and analytics read current conversation status.
+This is a single-workspace design prototype, not a production SaaS. Sample customers, stock, and messages are available in demo mode. The dashboard's seven-day activity chart is illustrative. Inbox replies persist locally but are not sent externally. Sample AI responses and classifications are seeded; no LLM is connected. Overview cards and analytics read current conversation status.
 
 Before production: extend owner authentication with account recovery and login rate limits, tenant-scoped authorization and data isolation, secure sessions, rate limits, audit logs, Meta OAuth/webhooks and signature validation, consent and retention controls, real order/payment reconciliation, LLM integration, and subscription billing. Never expose this unauthenticated demo to sensitive customer data. Meta connections require each business's authorization and applicable review. Google Fonts is optional; system fonts work offline.
 
@@ -40,7 +40,7 @@ On GitHub Pages, the app uses sample JSON and browser local storage instead of t
 
 Analytics now includes current stock, paid units sold, paid item revenue, gross profit from recorded line costs, paid order count, average paid order value, current retail stock value, and low-stock warnings (10 units or fewer). Product and channel breakdowns reconcile to the sample order ledger; CSV export respects sales period/channel filters. Current inventory remains global regardless of sales filters. Inquiry, price concern, and inactive-chat counts use all conversation history for the selected channel because chat timestamps are not yet recorded.
 
-Order fixtures are dated November 4–13, 2026. Paid order totals exclude pending, cancelled, and refunded records. This prototype does not model refund cash flow, full stock movement history, shipping, taxes, or operating expenses. Chat status changes do not create orders or update stock. An initial sample order ledger is seeded only when `SEED_DEMO=1`; GitHub Pages users keep their local replies and statuses while receiving the new sample ledger.
+Order fixtures are dated November 4–13, 2026. Paid order totals exclude pending, cancelled, and refunded records. This prototype does not model refund cash flow, shipping or taxes. Chat status changes do not create orders or update stock. An initial sample order ledger is seeded only when `SEED_DEMO=1`; GitHub Pages users keep their local replies and statuses while receiving the new sample ledger.
 
 
 ## PostgreSQL connection and existing data
@@ -66,3 +66,14 @@ Share `https://ai-again.onrender.com/shop` with customers. Customers create thei
 In the owner dashboard, open **Inbox → Refresh inbox**, select the customer, and reply. Linked orders appear in the conversation. **Confirm payment** requires you to have received payment separately and enter the unit cost for profit reporting; it marks the order Paid and deducts stock atomically. Pending orders do not reserve stock. The owner can also use **Create order from chat** for a customer-assisted sale. Product prices for customer requests come from the database, not customer input. Repeated requests with the same request key return the same order.
 
 The existing database is upgraded additively on startup; existing owner credentials, products, messages, and orders are retained. Customers must register themselves; no default or shared customer password is provided. GitHub Pages links customers to the hosted store because it cannot host private chat accounts. Owner and customer account recovery, email verification, payment processing, and Meta integrations remain outside this feature.
+
+
+## Warehouse and business profile
+
+The owner can open **Overview → Warehouse & sales** to see available quantities by product, withdrawals recorded this month, low stock, and net result. In **Business profile**, use **Add product** or **Edit product** for catalog details and unit cost. Use **Adjust stock** for restocks, count corrections, and damaged or lost inventory. A paid sale deducts stock and records the movement together. A write-off uses the unit cost recorded at the time of the adjustment. Stock already present before this feature is included in the available balance. Movement history starts with new activity.
+
+Select a year and a month, calendar quarter, or full year under **Profit & loss**. Net result subtracts product costs, recorded operating expenses, and inventory write-offs from paid item revenue. New payments count on their confirmation date in Cairo time. Older paid orders use their existing order date. Figures use the workspace's existing USD currency and exclude tax, shipping, and refund cash flow.
+
+Set a revenue target for any month or quarter in the selected year. Each period tracks its own paid revenue. Enter zero to clear a target.
+
+Direct links are `/shop?account=signup` for a new customer, `/shop?account=signin` for a returning customer, and `/#profile` for the owner's business profile after sign-in.

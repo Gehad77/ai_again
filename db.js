@@ -21,6 +21,22 @@ export async function initialize(){
  CREATE TABLE IF NOT EXISTS customers(id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,salt TEXT NOT NULL,conversation_id INTEGER UNIQUE NOT NULL REFERENCES conversations(id));
  CREATE TABLE IF NOT EXISTS customer_sessions(token TEXT PRIMARY KEY,customer_id INTEGER NOT NULL REFERENCES customers(id),expires_at TIMESTAMPTZ NOT NULL);
  CREATE TABLE IF NOT EXISTS conversation_orders(order_id INTEGER PRIMARY KEY REFERENCES orders(id),conversation_id INTEGER NOT NULL REFERENCES conversations(id),request_key TEXT UNIQUE NOT NULL);`);
+ await c.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12,2) CHECK(unit_cost>=0);
+ ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+ CREATE TABLE IF NOT EXISTS stock_movements(
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  product_id INTEGER NOT NULL REFERENCES products(id), order_id INTEGER UNIQUE REFERENCES orders(id),
+  delta INTEGER NOT NULL CHECK(delta<>0), stock_after INTEGER NOT NULL CHECK(stock_after>=0),
+  kind TEXT NOT NULL CHECK(kind IN ('opening','sale','restock','correction','writeoff')),
+  note TEXT NOT NULL DEFAULT '', unit_cost NUMERIC(12,2), date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ );
+ CREATE TABLE IF NOT EXISTS operating_expenses(
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  description TEXT NOT NULL, amount NUMERIC(12,2) NOT NULL CHECK(amount>0), date DATE NOT NULL
+ );
+ CREATE TABLE IF NOT EXISTS sales_targets(
+  period TEXT PRIMARY KEY, amount NUMERIC(12,2) NOT NULL CHECK(amount>=0)
+ );`);
  if(process.env.SEED_DEMO==='1'){
  const d=JSON.parse(readFileSync(new URL('./public/demo-data.json',import.meta.url),'utf8'));
  for(const x of d.overview.conversations)await c.query('INSERT INTO conversations VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',[x.id,x.name,x.initials,x.channel,x.product,x.status,x.intent,x.color]);

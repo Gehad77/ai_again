@@ -20,7 +20,7 @@ after(async()=>{await close();await admin.query(`DROP SCHEMA ${schema} CASCADE`)
 test('workspace returns seeded conversations and inventory',async()=>{const r=await fetch(base+'/api/overview');assert.equal(r.status,200);const d=await r.json();assert.equal(d.conversations.length,6);assert.equal(d.products.length,4);assert.equal(d.demo,true);});
 test('reply persists and conversion status updates',async()=>{let r=await fetch(base+'/api/conversations/1/messages',{method:'POST',body:JSON.stringify({body:'Olive is available. Would you like to order?'})});assert.equal(r.status,201);let msgs=await(await fetch(base+'/api/conversations/1')).json();assert.equal(msgs.at(-1).role,'agent');assert.match(msgs.at(-1).body,/Olive/);r=await fetch(base+'/api/conversations/1',{method:'PATCH',body:JSON.stringify({status:'Converted'})});assert.equal(r.status,200);const d=await(await fetch(base+'/api/overview')).json();assert.equal(d.conversations[0].status,'Converted');});
 test('rejects invalid payloads and missing conversations',async()=>{for(const body of ['{',JSON.stringify({body:''})]){const r=await fetch(base+'/api/conversations/1/messages',{method:'POST',body});assert.equal(r.status,400);}assert.equal((await fetch(base+'/api/conversations/999')).status,404);assert.equal((await fetch(base+'/api/conversations/1',{method:'PATCH',body:JSON.stringify({status:'nonsense'})})).status,400);});
-test('frontend and assets are served',async()=>{for(const path of ['/','/app.js','/style.css'])assert.equal((await fetch(base+path)).status,200);assert.equal((await fetch(base+'/server.js')).status,404);});
+test('frontend and assets are served',async()=>{for(const path of ['/','/app.js','/style.css','/business-model.js','/business-view.js'])assert.equal((await fetch(base+path)).status,200);assert.equal((await fetch(base+'/server.js')).status,404);});
 
 test('reinitializing PostgreSQL preserves replies and statuses',async()=>{const {initialize}=await import('../db.js');await initialize();const messages=await(await fetch(base+'/api/conversations/1')).json();assert.equal(messages.at(-1).role,'agent');const overview=await(await fetch(base+'/api/overview')).json();assert.equal(overview.conversations[0].status,'Converted');assert.equal(overview.orders.length,8);assert.equal(typeof overview.products[0].price,'number');});
 
@@ -60,7 +60,43 @@ test('customer chat orders are private, priced by server, and confirmed once',as
  assert.equal((await rawFetch(base+`/api/orders/${id}/confirm`,{method:'POST',headers:{cookie:buyerCookie},body:JSON.stringify({unit_cost:5})})).status,401);
  assert.equal((await fetch(base+`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost:5})})).status,200);
  assert.equal((await fetch(base+`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost:5})})).status,400);
- overview=await(await fetch(base+'/api/overview')).json();assert.equal(overview.products.find(p=>p.id===prod.id).stock,2);assert.equal(overview.orders.find(o=>o.id===id).status,'Paid');
+ overview=await(await fetch(base+'/api/overview')).json();assert.equal(overview.products.find(p=>p.id===prod.id).stock,2);assert.equal(overview.orders.find(o=>o.id===id).status,'Paid');assert.equal(overview.movements.filter(m=>m.order_id===id).length,1);
  assert.equal((await request('orders',{...payload,quantity:9,request_key:'customer-order-request-456'},buyerCookie)).status,400);
  assert.equal((await request('signout',{},buyerCookie)).status,200);assert.equal((await request('chat',null,buyerCookie)).status,401);
+});
+
+test('warehouse adjustments, paid sales, and business settings persist together', async () => {
+ const send = (path, method, data) => fetch(base + path, {method, body: JSON.stringify(data)});
+ const created = await send('/api/products', 'POST', {name:'Warehouse item',category:'Test',stock:4,price:20,unit_cost:7});
+ assert.equal(created.status, 201);
+ const {id} = await created.json();
+ const path = '/api/products/' + id;
+ assert.equal((await send(path, 'PATCH', {name:'Updated item',category:'Test',price:25,unit_cost:8})).status, 200);
+ const writeoff = {kind:'writeoff', delta:-3, note:'Damaged'};
+ const competing = await Promise.all([send(path+'/stock','POST',writeoff),send(path+'/stock','POST',writeoff)]);
+ assert.deepEqual(competing.map(r=>r.status).sort(), [201,400]);
+ assert.equal((await send(path+'/stock','POST',{kind:'restock',delta:4,note:'Shipment'})).status, 201);
+ const sale = await send('/api/orders', 'POST', {product_id:id,quantity:2,unit_price:25,unit_cost:8,channel:'Website',status:'Paid'});
+ assert.equal(sale.status, 201);
+ const order = await sale.json();
+ const expense = await send('/api/expenses','POST',{description:'Warehouse rent',amount:12.5,date:'2026-11-22'});
+ assert.equal(expense.status, 201);
+ assert.equal((await send('/api/expenses','POST',{description:'Invalid date',amount:12.5,date:'2026-02-30'})).status, 400);
+ for (const period of ['2026-11','2026-Q4']) {
+  assert.equal((await send('/api/targets','PUT',{period,amount:50})).status, 200);
+ }
+ assert.equal((await send('/api/targets','PUT',{period:'2026-Q4',amount:100})).status, 200);
+ const data = await (await fetch(base+'/api/overview')).json();
+ assert.equal(data.products.find(p=>p.id===id).stock, 3);
+ assert(order.paid_at);
+ const movements = data.movements.filter(m=>m.product_id===id);
+ assert.deepEqual(movements.map(m=>[m.kind,m.delta,m.stock_after]), [
+  ['sale',-2,3],['restock',4,5],['writeoff',-3,1],['opening',4,4]
+ ]);
+ assert.equal(movements[0].order_id, order.id);
+ assert.equal(movements[2].unit_cost, 8);
+ assert.equal(data.expenses.find(e=>e.description==='Warehouse rent').date, '2026-11-22');
+ assert.deepEqual(data.targets.map(t=>[t.period,t.amount]).sort(), [['2026-11',50],['2026-Q4',100]]);
+ const catalog = await (await rawFetch(base+'/api/shop/products')).json();
+ assert(!('unit_cost' in catalog.products.find(p=>p.id===id)));
 });
