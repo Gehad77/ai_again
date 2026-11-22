@@ -53,7 +53,7 @@ For a hosted database, create a PostgreSQL project in your own Neon, Supabase, o
 
 ## Owner sign-in, products, and orders
 
-On the backend, the first visit prompts you to create the single workspace owner account (email and a password of 12–128 characters). Later visits use sign-in; sign-out revokes the current session. Passwords use salted scrypt hashes, and seven-day sessions use HttpOnly, SameSite cookies. Use HTTPS and NODE_ENV=production for secure cookies when deploying. Account recovery and multiple user accounts are not yet supported. Initialize the owner before exposing a new instance publicly.
+On a development backend, the first visit prompts you to create the single workspace owner account (email and a password of 12–128 characters). Production owner setup uses the hosting shell as described below. Later visits use sign-in; sign-out revokes the current session. Passwords use salted scrypt hashes, and seven-day sessions use HttpOnly, SameSite cookies. Use HTTPS and NODE_ENV=production for secure cookies when deploying. Account recovery and multiple user accounts are not yet supported. Initialize the owner before exposing a new instance publicly.
 
 Use **Add product** on the dashboard or Products page to enter a name, category, price, and stock. In **Inbox**, select a conversation and use **Create order from chat** to choose a product, quantity, selling price, cost, channel, and status. Customers can also request orders themselves from `/shop`. Orders receive the current timestamp. Paid orders atomically reduce stock and reject insufficient inventory; other statuses do not change stock. The order ledger and analytics refresh after saving. Existing seeded ledger entries do not retroactively deduct stock.
 
@@ -77,3 +77,13 @@ Select a year and a month, calendar quarter, or full year under **Profit & loss*
 Set a revenue target for any month or quarter in the selected year. Each period tracks its own paid revenue. Enter zero to clear a target.
 
 Direct links are `/shop?account=signup` for a new customer, `/shop?account=signin` for a returning customer, and `/#profile` for the owner's business profile after sign-in.
+
+## Owner access, password recovery, and PostgreSQL
+
+**Customers** in the signed-in owner dashboard lists the accounts registered through the shop. This list comes from PostgreSQL. For accounts created before registration timestamps were stored, the date is unavailable.
+
+For production, set `NODE_ENV=production`, `OWNER_EMAIL`, `RESEND_API_KEY` and `RECOVERY_FROM_EMAIL` in the hosting service's environment settings. Resend requires a verified sender domain. Use **Forgot password?** with the existing owner's registered email. The eight-digit code expires after ten minutes, has five verification attempts, and can be replaced after one minute. Resetting the password ends existing owner sessions.
+
+For a new production database, run `npm run owner:setup` in the hosting shell with those settings configured, then use **Forgot password?** to set the first password. This command creates the owner only if the database has none. The settings do not change the email of an existing owner. An authorized database administrator can check the current owner email from a private SQL session using `SELECT email FROM users WHERE id = 1;`.
+
+In Render, open the web service and check **Environment → DATABASE_URL**. It identifies the PostgreSQL instance the live service uses. For a Render-managed database, open that database service and use **Connect** for its connection details. For a database hosted elsewhere, open its provider dashboard for access and backups. Treat all connection URLs as secrets. The local Compose database is `relay_crm` on `127.0.0.1:5432` and contains development data.

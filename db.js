@@ -21,6 +21,14 @@ export async function initialize(){
  CREATE TABLE IF NOT EXISTS customers(id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,salt TEXT NOT NULL,conversation_id INTEGER UNIQUE NOT NULL REFERENCES conversations(id));
  CREATE TABLE IF NOT EXISTS customer_sessions(token TEXT PRIMARY KEY,customer_id INTEGER NOT NULL REFERENCES customers(id),expires_at TIMESTAMPTZ NOT NULL);
  CREATE TABLE IF NOT EXISTS conversation_orders(order_id INTEGER PRIMARY KEY REFERENCES orders(id),conversation_id INTEGER NOT NULL REFERENCES conversations(id),request_key TEXT UNIQUE NOT NULL);`);
+ await c.query(`
+ CREATE TABLE IF NOT EXISTS owner_recovery(
+  owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  request_id TEXT NOT NULL, code_hash BYTEA NOT NULL, expires_at TIMESTAMPTZ NOT NULL,
+  next_request TIMESTAMPTZ NOT NULL, attempts INTEGER NOT NULL DEFAULT 0
+ );
+ ALTER TABLE customers ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ;
+ ALTER TABLE customers ALTER COLUMN registered_at SET DEFAULT CURRENT_TIMESTAMP;`);
  await c.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12,2) CHECK(unit_cost>=0);
  ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
  CREATE TABLE IF NOT EXISTS stock_movements(

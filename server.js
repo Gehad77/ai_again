@@ -1,3 +1,4 @@
+import { ownerEmail, recoveryEnabled, recover } from './owner-recovery.js';
 import http from 'node:http';
 import {businessRoutes,recordSale} from './business.js';
 import {customerRoutes} from './customer.js';
@@ -24,24 +25,41 @@ export const server=http.createServer(async(req,res)=>{
  const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('relay_session='))?.slice(14)||'';
  const signedIn=!!(await pool.query('SELECT token FROM sessions WHERE token=$1 AND expires_at>NOW()',[digest(cookie)])).rowCount;
  const configured=!!(await pool.query('SELECT id FROM users')).rowCount;
- if(route==='/api/auth/session'&&req.method==='GET')return json(res,200,{signedIn,configured});
+ if(route==='/api/auth/session'&&req.method==='GET')return json(res,200,{signedIn,configured,recoveryEnabled:recoveryEnabled(),ownerSetupFromHost:process.env.NODE_ENV==='production'});
+ if(['/api/auth/recovery/request','/api/auth/recovery/reset'].includes(route)&&req.method==='POST'){
+  const result=await recover(req,route,body,invalid);
+  return result.ok?json(res,200,result):json(res,400,{error:'The code is invalid or expired. Request a new code.'});
+ }
  if(['/api/auth/setup','/api/auth/signin'].includes(route)&&req.method==='POST'){
  const p=await body(req);const email=typeof p.email==='string'?p.email.trim().toLowerCase():'';
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof p.password!=='string'||p.password.length<12||p.password.length>128)invalid('Enter a valid email and a password of 12–128 characters.');
+ let verifiedHash;
  if(route.endsWith('/setup')){
+ const allowed=ownerEmail();
+ if(!allowed&&process.env.NODE_ENV==='production')return json(res,503,{error:'Set OWNER_EMAIL in the hosting settings before creating the owner account.'});
+ if(allowed&&email!==allowed)return json(res,403,{error:'Use the configured owner email.'});
+ if(allowed&&process.env.NODE_ENV==='production')return json(res,403,{error:'Create the first owner from the hosting shell using npm run owner:setup.'});
  const salt=randomBytes(16).toString('hex');const hash=(await scrypt(p.password,salt,64)).toString('hex');
+ verifiedHash=hash;
  const result=await pool.query('INSERT INTO users VALUES(1,$1,$2,$3) ON CONFLICT DO NOTHING RETURNING id',[email,hash,salt]);
  if(!result.rowCount)return json(res,409,{error:'Owner account already exists. Please sign in.'});
  }else{
  const user=(await pool.query('SELECT * FROM users WHERE id=1')).rows[0];
  const hash=await scrypt(p.password,user?.salt||'missing-account',64);
  if(!user||user.email!==email||!timingSafeEqual(hash,Buffer.from(user.password_hash,'hex')))return json(res,401,{error:'Email or password is incorrect.'});
+ verifiedHash=user.password_hash;
  }
- const token=randomBytes(32).toString('hex');await pool.query("DELETE FROM sessions WHERE expires_at<=NOW()");await pool.query("INSERT INTO sessions VALUES($1,NOW()+INTERVAL '7 days')",[digest(token)]);
+ const token=randomBytes(32).toString('hex');await pool.query("DELETE FROM sessions WHERE expires_at<=NOW()");const session=await pool.query(`INSERT INTO sessions
+ SELECT $1,NOW()+INTERVAL '7 days' FROM users WHERE id=1 AND password_hash=$2 FOR SHARE`,[digest(token),verifiedHash]);
+ if(!session.rowCount)return json(res,401,{error:'Email or password is incorrect.'});
  res.setHeader('Set-Cookie',`relay_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${process.env.NODE_ENV==='production'?'; Secure':''}`);return json(res,200,{ok:true});
  }
  if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
+ }
+ if(route==='/api/customers'&&req.method==='GET'){
+  const {rows}=await pool.query(`SELECT id,name,email,conversation_id,registered_at FROM customers ORDER BY id DESC`);
+  return json(res,200,{customers:rows});
  }
  await businessRoutes(req,res,route,{body,invalid,json});
  if(res.writableEnded)return;

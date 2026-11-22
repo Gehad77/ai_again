@@ -100,3 +100,60 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  const catalog = await (await rawFetch(base+'/api/shop/products')).json();
  assert(!('unit_cost' in catalog.products.find(p=>p.id===id)));
 });
+
+test('registered customer accounts are visible only to the owner', async () => {
+ const endpoint = base + '/api/customers';
+ assert.equal((await rawFetch(endpoint)).status,401);
+ const signup = await rawFetch(base+'/api/shop/signup',{method:'POST',body:JSON.stringify({
+  name:'Registered customer',email:'directory@example.com',password:'customer-password-123'
+ })});
+ assert.equal(signup.status,200);
+ const customerCookie=signup.headers.get('set-cookie').split(';')[0];
+ assert.equal((await rawFetch(endpoint,{headers:{cookie:customerCookie}})).status,401);
+ const {customers}=await (await fetch(endpoint)).json();
+ const account=customers.find(entry=>entry.email==='directory@example.com');
+ assert.equal(account.name,'Registered customer');
+ assert(account.registered_at);
+ assert(!('password_hash' in account));
+});
+
+test('OTP recovery sends only to the owner, expires attempts, and revokes sessions', async () => {
+ process.env.RESEND_API_KEY='test-only-mail-key';
+ process.env.RECOVERY_FROM_EMAIL='Relay <test@example.com>';
+ const mails=[];
+ globalThis.fetch=async (url,options)=>{
+  assert.equal(url,'https://api.resend.com/emails');
+  mails.push(JSON.parse(options.body));
+  return new Response(null,{status:200});
+ };
+ const owner='owner@example.com';
+ const send=(action,data)=>rawFetch(base+'/api/auth/recovery/'+action,{method:'POST',body:JSON.stringify(data)});
+ try{
+  assert.equal((await send('request',{email:'other@example.com'})).status,200);
+  assert.equal(mails.length,0);
+  assert.equal((await send('request',{email:owner})).status,200);
+  assert.equal((await send('request',{email:owner})).status,200);
+  assert.equal(mails.length,1);
+  assert.deepEqual(mails[0].to,[owner]);
+  const code=mails[0].text.match(/\b\d{8}\b/)[0];
+  const wrong=code==='00000000'?'99999999':'00000000';
+  const password='updated-test-owner-password';
+  for(let i=0;i<5;i++)assert.equal((await send('reset',{email:owner,code:wrong,password})).status,400);
+  assert.equal((await send('reset',{email:owner,code,password})).status,400);
+  const {pool}=await import('../db.js');
+  await pool.query("UPDATE owner_recovery SET attempts=0,next_request=NOW(),expires_at=NOW()-INTERVAL '1 minute'");
+  assert.equal((await send('reset',{email:owner,code,password})).status,400);
+  assert.equal((await send('request',{email:owner})).status,200);
+  const next=mails[1].text.match(/\b\d{8}\b/)[0];
+  assert.equal((await send('reset',{email:owner,code:next,password})).status,200);
+  assert.equal((await send('reset',{email:owner,code:next,password})).status,400);
+  assert.equal((await fetch(base+'/api/overview')).status,401);
+  const signin=async password=>rawFetch(base+'/api/auth/signin',{method:'POST',body:JSON.stringify({email:owner,password})});
+  assert.equal((await signin('test-password-12345')).status,401);
+  assert.equal((await signin(password)).status,200);
+ }finally{
+  globalThis.fetch=rawFetch;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.RECOVERY_FROM_EMAIL;
+ }
+});
