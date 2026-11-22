@@ -8,7 +8,7 @@ const normalize = email => typeof email === 'string' ? email.trim().toLowerCase(
 export const ownerEmail = () => normalize(process.env.OWNER_EMAIL);
 export const recoveryEnabled = () => Boolean(process.env.RESEND_API_KEY && process.env.RECOVERY_FROM_EMAIL);
 
-const hashCode = (id, code) => createHmac('sha256', process.env.RESEND_API_KEY).update(id + ':' + code).digest();
+const hashCode = (email, id, code) => createHmac('sha256', process.env.RESEND_API_KEY).update(JSON.stringify([email,id,code])).digest();
 
 async function sendCode(email, code) {
   const response = await fetch('https://api.resend.com/emails', {
@@ -40,7 +40,7 @@ export async function recover(request, path, readBody, invalid) {
       ON CONFLICT(owner_id) DO UPDATE SET request_id=EXCLUDED.request_id,code_hash=EXCLUDED.code_hash,
       expires_at=EXCLUDED.expires_at,next_request=EXCLUDED.next_request,attempts=0
       WHERE owner_recovery.next_request<=NOW()
-      RETURNING request_id`, [email, id, hashCode(id, code)]);
+      RETURNING request_id`, [email, id, hashCode(email, id, code)]);
     if (rows.length) {
       try { await sendCode(email, code); }
       catch { console.error('Owner password recovery email could not be sent. Check the mail provider configuration.'); }
@@ -60,7 +60,7 @@ export async function recover(request, path, readBody, invalid) {
     const challenge = user && (await client.query(`
       SELECT request_id, code_hash FROM owner_recovery
       WHERE owner_id=1 AND expires_at>NOW() AND attempts<5 FOR UPDATE`)).rows[0];
-    const matches = challenge && timingSafeEqual(challenge.code_hash, hashCode(challenge.request_id, code));
+    const matches = challenge && timingSafeEqual(challenge.code_hash, hashCode(email, challenge.request_id, code));
     if (matches) {
       const salt = randomBytes(16).toString('hex');
       const hash = (await scrypt(password, salt, 64)).toString('hex');

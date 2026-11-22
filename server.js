@@ -1,3 +1,4 @@
+import { adminRecoveryAvailable, resetWithAccessCode } from './owner-access-code.js';
 import { ownerEmail, recoveryEnabled, recover } from './owner-recovery.js';
 import http from 'node:http';
 import {businessRoutes,recordSale} from './business.js';
@@ -25,7 +26,11 @@ export const server=http.createServer(async(req,res)=>{
  const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('relay_session='))?.slice(14)||'';
  const signedIn=!!(await pool.query('SELECT token FROM sessions WHERE token=$1 AND expires_at>NOW()',[digest(cookie)])).rowCount;
  const configured=!!(await pool.query('SELECT id FROM users')).rowCount;
- if(route==='/api/auth/session'&&req.method==='GET')return json(res,200,{signedIn,configured,recoveryEnabled:recoveryEnabled(),ownerSetupFromHost:process.env.NODE_ENV==='production'});
+ if(route==='/api/auth/session'&&req.method==='GET')return json(res,200,{signedIn,configured,recoveryEnabled:recoveryEnabled(),adminRecoveryEnabled:await adminRecoveryAvailable(),ownerSetupFromHost:process.env.NODE_ENV==='production'});
+ if(route==='/api/auth/recovery/access-code'&&req.method==='POST'){
+  const ok=await resetWithAccessCode(await body(req),invalid);
+  return ok?json(res,200,{ok:true}):json(res,400,{error:'The hosting recovery code is invalid, disabled, or already used.'});
+ }
  if(['/api/auth/recovery/request','/api/auth/recovery/reset'].includes(route)&&req.method==='POST'){
   const result=await recover(req,route,body,invalid);
   return result.ok?json(res,200,result):json(res,400,{error:'The code is invalid or expired. Request a new code.'});

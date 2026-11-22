@@ -157,3 +157,34 @@ test('OTP recovery sends only to the owner, expires attempts, and revokes sessio
   delete process.env.RECOVERY_FROM_EMAIL;
  }
 });
+
+test('hosting recovery changes the existing owner once and preserves business data', async () => {
+ const endpoint=base+'/api/auth/recovery/access-code';
+ const recover=async (accessCode,password)=>rawFetch(endpoint,{method:'POST',body:JSON.stringify({accessCode,password})});
+ const password='owner-new-password-123';
+ const accessCode='test-only-recovery-code-abcdefghijklmnopqrstuvwxyz123';
+ assert.equal((await recover(accessCode,password)).status,400);
+ process.env.OWNER_EMAIL='restored@example.com';
+ process.env.OWNER_ACCESS_CODE=accessCode;
+ try{
+  assert.equal((await (await rawFetch(base+'/api/auth/session')).json()).adminRecoveryEnabled,true);
+  assert.equal((await recover(accessCode+'wrong',password)).status,400);
+  const attempts=await Promise.all([recover(accessCode,password),recover(accessCode,password)]);
+  assert.deepEqual(attempts.map(result=>result.status).sort(),[200,400]);
+  assert.equal((await (await rawFetch(base+'/api/auth/session')).json()).adminRecoveryEnabled,false);
+  const login=await rawFetch(base+'/api/auth/signin',{method:'POST',body:JSON.stringify({email:'restored@example.com',password})});
+  assert.equal(login.status,200);
+  const oldLogin=await rawFetch(base+'/api/auth/signin',{method:'POST',body:JSON.stringify({
+   email:'owner@example.com',password:'updated-test-owner-password'
+  })});
+  assert.equal(oldLogin.status,401);
+  const cookie=login.headers.get('set-cookie').split(';')[0];
+  const directory=await rawFetch(base+'/api/customers',{headers:{cookie}});
+  assert((await directory.json()).customers.some(customer=>customer.email==='directory@example.com'));
+  const overview=await rawFetch(base+'/api/overview',{headers:{cookie}});
+  assert((await overview.json()).products.some(product=>product.name==='Warehouse item'||product.name==='Updated item'));
+ }finally{
+  delete process.env.OWNER_EMAIL;
+  delete process.env.OWNER_ACCESS_CODE;
+ }
+});

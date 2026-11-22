@@ -62,6 +62,32 @@ async function loadCustomerAccounts(){
  }catch(error){section.innerHTML=heading+`<p class="stock-alert" role="alert">${esc(error.message)}</p>`;}
 }
 
+function hostingRecovery(session){
+ $('#app').innerHTML=`<main class="auth-shell"><section class="card auth-card"><h1>Reset owner access</h1>
+ <p>Enter the one-time code you set in the hosting environment, then choose a new password.</p>
+ <form id="hosting-recovery"><label>Hosting recovery code<input name="accessCode" type="password" autocomplete="off" minlength="32" maxlength="128" required></label>
+ <label>New password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+ <p class="form-error" role="alert"></p><button class="primary">Save owner password</button></form>
+ <button type="button" id="hosting-back">Back</button></section></main>`;
+ $('#hosting-back').onclick=()=>auth(session.configured,session.recoveryEnabled,session.ownerSetupFromHost,true);
+ $('#hosting-recovery').onsubmit=async event=>{
+  event.preventDefault();
+  const form=event.currentTarget;
+  const button=form.querySelector('button');
+  button.disabled=true;
+  try{
+   await api('/api/auth/recovery/access-code',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});
+  }catch(error){
+   form.querySelector('[role="alert"]').textContent=error.message;
+   button.disabled=false;
+   return;
+  }
+  history.replaceState(null,'',location.pathname+location.hash);
+  auth(true,session.recoveryEnabled,session.ownerSetupFromHost,false);
+  $('#auth-notice').textContent='Password saved. Sign in using the email you set in the hosting environment.';
+ };
+}
+
 function recoveryAuth(configured, enabled){
  $('#app').innerHTML=`<main class="auth-shell"><section class="card auth-card"><h1>Reset owner password</h1>
  <p>${enabled?'Request an 8-digit code using the email linked to the owner account.':'Email recovery is unavailable until the hosting administrator configures it.'}</p>
@@ -108,13 +134,23 @@ function recoveryAuth(configured, enabled){
  resend.onclick=()=>send(false);
 }
 
-function auth(configured, recoveryEnabled, ownerSetupFromHost){
+function auth(configured, recoveryEnabled, ownerSetupFromHost, adminRecoveryEnabled){
+ const addHostingReset=()=>{
+  if(!adminRecoveryEnabled)return;
+  const button=document.createElement('button');
+  button.type='button';
+  button.textContent='Reset with hosting code';
+  button.onclick=()=>hostingRecovery({configured,recoveryEnabled,ownerSetupFromHost});
+  $('.auth-card').append(button);
+ };
  if(!configured&&ownerSetupFromHost){
   $('#app').innerHTML='<main class="auth-shell"><section class="card auth-card"><a class="brand" href="./">relay.</a><h1>Owner setup required</h1><p>The hosting administrator needs to create the owner from the hosting shell. Website customers can register in the shop.</p><a href="./shop?account=signup">Create a customer account</a></section></main>';
+  addHostingReset();
   return;
  }
  $('#app').innerHTML=`<main class="auth-shell"><section class="card auth-card"><a class="brand" href="./">relay.</a><div class="eyebrow">YOUR SALES, CONNECTED</div><h1>${preview?'Explore your workspace':configured?'Welcome back.':'Create your owner account.'}</h1><p>${preview?'This preview stores changes in this browser. It does not provide account security.':configured?'Sign in to manage products, orders, and conversations.':'The first account owns this shared workspace.'}</p>${preview?'<button class="primary" id="enter-demo">Enter demo workspace ↗</button>':`<form id="auth-form"><label>Email<input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Password<input name="password" type="password" autocomplete="${configured?'current-password':'new-password'}" minlength="12" maxlength="128" required></label><small>Use 12–128 characters.</small><p class="form-error" role="alert"></p><button class="primary">${configured?'Sign in':'Create account'}</button></form><p id="auth-notice" role="status"></p>${configured?'<button type="button" id="forgot-password">Forgot password?</button>':''}`}</section></main>`;
  if(preview){$('#enter-demo').onclick=async()=>{sessionStorage.setItem('relay-demo-session','1');await boot();};return;}
+ addHostingReset();
  if(configured)$('#forgot-password').onclick=()=>recoveryAuth(configured,recoveryEnabled);
  $('#auth-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget;const button=form.querySelector('button');button.disabled=true;try{await api(configured?'/api/auth/signin':'/api/auth/setup',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});await boot();}catch(error){form.querySelector('.form-error').textContent=error.message;}finally{button.disabled=false;}};
 }
@@ -214,5 +250,5 @@ function bindBusinessProfile(){
 }
 
 async function confirmPayment(id){const value=prompt('Confirm only after receiving payment. Enter unit cost ($) for profit reporting:',state.data.products.find(p=>p.id===state.data.orders.find(o=>o.id===id)?.product_id)?.unit_cost??'');if(value===null||!value.trim())return;const unit_cost=Number(value);if(!Number.isFinite(unit_cost)||unit_cost<0)return toast('Enter a valid unit cost.');try{await api(`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost})});state.data=await api('/api/overview');await inbox();toast('Payment confirmed and stock updated');}catch(e){toast(e.message);}}
-async function boot(){try{if(preview&&!sessionStorage.getItem('relay-demo-session'))return auth(true);if(!preview){const session=await api('/api/auth/session');if(!session.signedIn)return auth(session.configured,session.recoveryEnabled,session.ownerSetupFromHost);}state.data=await api('/api/overview');render();}catch(e){$('#app').innerHTML='<main><h1>Unable to load your workspace</h1><p>Check that the backend is running, then refresh.</p></main>';}}
+async function boot(){try{if(preview&&!sessionStorage.getItem('relay-demo-session'))return auth(true);if(!preview){const session=await api('/api/auth/session');if(new URLSearchParams(location.search).get('recover')==='hosting'&&session.adminRecoveryEnabled)return hostingRecovery(session);if(!session.signedIn)return auth(session.configured,session.recoveryEnabled,session.ownerSetupFromHost,session.adminRecoveryEnabled);}state.data=await api('/api/overview');render();}catch(e){$('#app').innerHTML='<main><h1>Unable to load your workspace</h1><p>Check that the backend is running, then refresh.</p></main>';}}
 await boot();

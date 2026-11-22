@@ -22,6 +22,7 @@ export async function initialize(){
  CREATE TABLE IF NOT EXISTS customer_sessions(token TEXT PRIMARY KEY,customer_id INTEGER NOT NULL REFERENCES customers(id),expires_at TIMESTAMPTZ NOT NULL);
  CREATE TABLE IF NOT EXISTS conversation_orders(order_id INTEGER PRIMARY KEY REFERENCES orders(id),conversation_id INTEGER NOT NULL REFERENCES conversations(id),request_key TEXT UNIQUE NOT NULL);`);
  await c.query(`
+ CREATE TABLE IF NOT EXISTS used_owner_access_codes(digest BYTEA PRIMARY KEY);
  CREATE TABLE IF NOT EXISTS owner_recovery(
   owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   request_id TEXT NOT NULL, code_hash BYTEA NOT NULL, expires_at TIMESTAMPTZ NOT NULL,
