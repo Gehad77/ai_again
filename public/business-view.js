@@ -1,6 +1,6 @@
 import {taxGuide} from './guide.js';
 import { currency, formatMoney, locale, translate } from './i18n.js';
-import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, expenseCategoryName, priceScenario, productResults, productTargetReport, quarterFor, reportMargins, salesPlan } from './business-model.js';
+import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, expenseCategoryName, isLowStock, priceScenario, productResults, productTargetReport, quarterFor, reportMargins, salesPlan, stockAlertThreshold } from './business-model.js';
 
 const usd = formatMoney;
 const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
@@ -12,7 +12,7 @@ const metric = (label, value, caption = '') => `
 
 export function warehouseSummary(data, esc) {
   const stock = data.products.reduce((sum, product) => sum + product.stock, 0);
-  const low = data.products.filter(p => p.stock <= (data.settings?.low_stock_threshold ?? 10)).sort((a, b) => a.stock - b.stock);
+  const low = data.products.filter(p => isLowStock(p,data.settings)).sort((a, b) => a.stock - b.stock);
   const month = businessDate(undefined, data.settings?.time_zone).slice(0, 7);
   const summary = financials(data, month);
   const withdrawn = (data.movements ?? []).filter(m => m.delta < 0 && businessDate(m.date,data.settings?.time_zone).startsWith(month))
@@ -28,7 +28,7 @@ export function warehouseSummary(data, esc) {
     </div>
     <details class="card warehouse-detail"><summary>View stock by product</summary>
       <div class="table-wrap"><table><thead><tr><th>Product</th><th>Available units</th></tr></thead><tbody>
-      ${data.products.map(p => `<tr><td data-user-content>${esc(p.name)}</td><td>${p.stock}${p.stock <= (data.settings?.low_stock_threshold ?? 10) ? ' <span class="badge amber">Low stock</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="2">No products in the warehouse.</td></tr>'}
+      ${data.products.map(p => `<tr><td data-user-content>${esc(p.name)}</td><td>${p.stock}${isLowStock(p,data.settings) ? ' <span class="badge amber">Low stock</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="2">No products in the warehouse.</td></tr>'}
       </tbody></table></div>
     </details>
   </section>`;
@@ -443,15 +443,16 @@ export function warehousePage(data,esc){
   const costValue = data.products.reduce((sum, p) => sum + p.stock * (p.unit_cost ?? 0), 0);
   const unknown = data.products.filter(p => p.stock && p.unit_cost == null).length;
   const units=data.products.reduce((sum,p)=>sum+p.stock,0);
-  const threshold=data.settings?.low_stock_threshold??10;
   const month=businessDate(undefined,data.settings?.time_zone).slice(0,7);
   const moves=data.movements??[];
   const withdrawn=moves.reduce((sum,move)=>move.delta<0&&businessDate(move.date,data.settings?.time_zone).startsWith(month)?sum-move.delta:sum,0);
+  const cell=(label,value)=>`<td role="cell" data-label="${esc(translate(label))}"><span>${value}</span></td>`;
   return `<div class="heading"><h1>Warehouse</h1><p>Check stock, add or remove units, and review movement history.</p></div>
   <div class="metrics">
    ${metric('Units in stock',units.toLocaleString(locale()))}
    ${metric('Stock value at cost',usd(costValue),unknown?'Includes products with a saved unit cost':'')}
-   ${metric('Low-stock products',data.products.filter(p=>p.stock<=threshold).length)}
+   ${metric('Low-stock products',data.products.filter(p=>isLowStock(p,data.settings)).length)}
+   ${metric('Out-of-stock products',data.products.filter(p=>p.stock===0).length)}
    ${metric('Units withdrawn',withdrawn.toLocaleString(locale()),'Current month')}
   </div>
   <div class="page-actions"><button type="button" data-section="warehouse-stock">Stock by product</button>
@@ -459,11 +460,23 @@ export function warehousePage(data,esc){
   <section class="card recent business-card" id="warehouse-stock">
     <div class="card-head"><div><h2>Stock by product</h2></div>
     <div>${data.products.length?'<button data-create="order">Record sale</button>':''} <button class="primary" data-create="product">Add product</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Selling price</th><th>Unit cost</th><th>Actions</th></tr></thead><tbody>
-    ${data.products.map(p => `<tr><td><b data-user-content>${esc(p.name)}</b><small>${esc(p.category)}</small></td>
-      <td>${p.stock}${p.stock <= (data.settings?.low_stock_threshold ?? 10) ? ' <span class="badge amber">Low stock</span>' : ''}</td>
-      <td>${usd(p.price)}</td><td>${p.unit_cost == null ? 'Unset' : usd(p.unit_cost)}</td>
-      <td><button data-edit-product="${p.id}">Edit product</button> <button data-stock-product="${p.id}">Adjust stock</button></td></tr>`).join('') || '<tr><td colspan="5">Add your first product to start tracking stock.</td></tr>'}
+    <form id="warehouse-stock-filters" class="business-form" role="search">
+      <label>Search stock<input name="query" type="search" placeholder="Product name or category"></label>
+      <label class="expense-cost-toggle"><input name="low" type="checkbox"> Low stock only</label>
+    </form>
+    <div id="warehouse-stock-count" class="expense-filter-summary" role="status"></div>
+    <div class="table-wrap warehouse-table"><table role="table"><thead role="rowgroup"><tr role="row">
+      <th>Product</th><th>Stock</th><th>Stock alert threshold</th><th>Selling price</th><th>Unit cost</th><th>Actions</th>
+    </tr></thead><tbody role="rowgroup">
+    ${data.products.map(p => `<tr role="row" data-warehouse-stock="${p.id}">
+      ${cell('Product',`<b data-user-content>${esc(p.name)}</b><small data-user-content>${esc(p.category)}</small>`)}
+      ${cell('Stock',p.stock+(p.stock===0?' <span class="badge amber">Out of stock</span>':isLowStock(p,data.settings)?' <span class="badge amber">Low stock</span>':''))}
+      ${cell('Stock alert threshold',stockAlertThreshold(p,data.settings)+(p.stock_alert_threshold==null?' <small>Workspace default</small>':''))}
+      ${cell('Selling price',usd(p.price))}
+      ${cell('Unit cost',p.unit_cost==null?'Unset':usd(p.unit_cost))}
+      ${cell('Actions',`<div class="expense-actions"><button data-edit-product="${p.id}">Edit product</button><button data-stock-product="${p.id}">Adjust stock</button></div>`)}
+    </tr>`).join('')}
+    <tr id="warehouse-stock-empty" role="row" hidden><td colspan="6">No products match these filters.</td></tr>
     </tbody></table></div>
   </section>
   <section class="card recent business-card" id="warehouse-movements">
@@ -487,14 +500,42 @@ function movementRows(data,esc,product='',kind=''){
   '<tr><td colspan="6">No stock movements match these filters.</td></tr>';
 }
 
-export function bindWarehouseFilters(data,esc){
+export function bindWarehouseFilters(data,esc,filters){
  const product=document.querySelector('#warehouse-product');
  const kind=document.querySelector('#warehouse-kind');
+ if([...product.options].some(option=>option.value===filters.product))product.value=filters.product;
+ if([...kind.options].some(option=>option.value===filters.kind))kind.value=filters.kind;
  const update=()=>{
+  filters.product=product.value;
+  filters.kind=kind.value;
   document.querySelector('#warehouse-movement-rows').innerHTML=movementRows(data,esc,product.value,kind.value);
  };
  product.onchange=update;
  kind.onchange=update;
+ if(product.value||kind.value)update();
+ const form=document.querySelector('#warehouse-stock-filters');
+ const rows=[...document.querySelectorAll('[data-warehouse-stock]')];
+ const catalog=new Map(data.products.map(item=>[item.id,item]));
+ form.elements.query.value=filters.query??'';
+ form.elements.low.checked=Boolean(filters.low);
+ const filterStock=()=>{
+  filters.query=form.elements.query.value;
+  filters.low=form.elements.low.checked;
+  const query=filters.query.trim().toLowerCase();
+  let count=0;
+  for(const row of rows){
+   const item=catalog.get(Number(row.dataset.warehouseStock));
+   const matches=(item.name+' '+item.category).toLowerCase().includes(query)&&(!filters.low||isLowStock(item,data.settings));
+   row.hidden=!matches;
+   if(matches)count++;
+  }
+  document.querySelector('#warehouse-stock-empty').hidden=count>0;
+  document.querySelector('#warehouse-stock-count').textContent=translate('Products shown')+' '+count.toLocaleString(locale());
+ };
+ form.oninput=filterStock;
+ form.onchange=filterStock;
+ form.onsubmit=event=>event.preventDefault();
+ filterStock();
 }
 
 export function stockDialog(product, esc) {

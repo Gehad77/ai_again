@@ -285,6 +285,22 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  assert.equal((await rawFetch(base+'/api/shop/products')).status,410);
 });
 
+test('a product can override the workspace stock alert and restore the default',async()=>{
+ const item={name:'Fast-moving stock',category:'Test',price:20,unit_cost:8,stock:8,stock_alert_threshold:12};
+ const send=(url,method,body)=>fetch(base+url,{method,body:JSON.stringify(body)});
+ assert.equal((await send('/api/products','POST',{...item,stock_alert_threshold:-1})).status,400);
+ const created=await send('/api/products','POST',item);
+ assert.equal(created.status,201);
+ const product=await created.json();
+ assert.equal(product.stock_alert_threshold,12);
+ const {stock_alert_threshold,...legacy}=item;
+ const path='/api/products/'+product.id;
+ const preserved=await send(path,'PATCH',{...legacy,name:'Fast-moving stock edited'});
+ assert.equal((await preserved.json()).stock_alert_threshold,12);
+ const reset=await send(path,'PATCH',{...legacy,stock_alert_threshold:null});
+ assert.equal((await reset.json()).stock_alert_threshold,null);
+});
+
 test('registered customer accounts are visible only to the owner', async t => {
  process.env.ENABLE_LEGACY_SHOP='1';
  t.after(()=>{delete process.env.ENABLE_LEGACY_SHOP;});

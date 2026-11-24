@@ -15,3 +15,14 @@ test('a paid order uses payment date for sales-period analytics',()=>{
   assert.equal(report.revenue,200);
   assert.equal(report.profit,80);
 });
+
+test('low-stock analytics applies per-product alerts with workspace fallback',()=>{
+ const common={price:20,stock:8};
+ const report=analyze({products:[
+  {...common,id:1,stock_alert_threshold:12},
+  {...common,id:2,stock_alert_threshold:0},
+  {...common,id:3,stock_alert_threshold:null},
+  {...common,id:4,stock:0,stock_alert_threshold:0}
+ ],conversations:[],orders:[],settings:{low_stock_threshold:10}});
+ assert.deepEqual(report.lowStock.map(product=>product.id),[1,3,4]);
+});

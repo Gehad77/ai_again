@@ -31,6 +31,7 @@ export async function initialize(){
  ALTER TABLE customers ADD COLUMN IF NOT EXISTS registered_at TIMESTAMPTZ;
  ALTER TABLE customers ALTER COLUMN registered_at SET DEFAULT CURRENT_TIMESTAMP;`);
  await c.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12,2) CHECK(unit_cost>=0);
+ ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_alert_threshold INTEGER CHECK(stock_alert_threshold>=0);
  ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
  CREATE TABLE IF NOT EXISTS stock_movements(
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

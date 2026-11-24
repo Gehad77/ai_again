@@ -15,7 +15,7 @@ const sections={
  ],
  warehouse:[
   ['Warehouse','المخزن'],
-  ['Review available stock and its cost, record restocks or write-offs, and filter movement history by product and movement type. Paid sales automatically reduce available stock.','راجعي الرصيد وتكلفته، وسجّلي التوريد أو التالف، وفلترّي سجل الحركات حسب المنتج ونوع الحركة. البيع المدفوع بيخصم تلقائيًا من الرصيد.']
+  ['Review available stock and its cost, record restocks or write-offs, and filter movement history by product and movement type. Paid sales reduce available stock. Set a product alert threshold for fast-moving items, or use the workspace default.','راجعي الرصيد وتكلفته، وسجّلي التوريد أو التالف، وفلترّي سجل الحركات حسب المنتج ونوع الحركة. البيع المدفوع بيخصم من الرصيد. حددي حد تنبيه منفصل للمنتج سريع البيع، أو استخدمي الحد العام.']
  ],
  profile:[
   ['Business profile','ملف النشاط'],

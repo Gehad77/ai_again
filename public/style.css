@@ -168,13 +168,13 @@
 #expense-ledger tr[hidden] { display:none; }
 @media(max-width:600px){
  #expense-filters label { flex:1 1 130px; }
- .expense-table table, .expense-table tbody { display:block; width:100%; }
- .expense-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
- .expense-table tbody tr:not([hidden]) { display:grid; gap:4px; padding:10px 14px; border-top:1px solid var(--border); }
- .expense-table td { display:flex; justify-content:space-between; align-items:start; gap:12px; padding:4px 0; border:0; white-space:normal; }
- .expense-table td[data-label]::before { content:attr(data-label); color:#4e6154; font-weight:600; }
- .expense-table td > span { min-width:0; overflow-wrap:anywhere; text-align:end; }
- .expense-table .expense-actions button { min-height:40px; }
+ :is(.expense-table,.warehouse-table) table, :is(.expense-table,.warehouse-table) tbody { display:block; width:100%; }
+ :is(.expense-table,.warehouse-table) thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+ :is(.expense-table,.warehouse-table) tbody tr:not([hidden]) { display:grid; gap:4px; padding:10px 14px; border-top:1px solid var(--border); }
+ :is(.expense-table,.warehouse-table) td { display:flex; justify-content:space-between; align-items:start; gap:12px; padding:4px 0; border:0; white-space:normal; }
+ :is(.expense-table,.warehouse-table) td[data-label]::before { content:attr(data-label); color:#4e6154; font-weight:600; }
+ :is(.expense-table,.warehouse-table) td > span { min-width:0; overflow-wrap:anywhere; text-align:end; }
+ :is(.expense-table,.warehouse-table) .expense-actions button { min-height:40px; }
 }
 .finance-summary.expense-overview { grid-template-columns:repeat(4,minmax(0,1fr)); }
 @media(max-width:800px){
@@ -195,3 +195,7 @@
 .budget-row dt { min-width:0; }
 .budget-row dd { text-align:end; margin:0; font-weight:650; max-width:45%; overflow-wrap:anywhere; }
 .budget-row small { display:block; margin-top:4px; overflow-wrap:anywhere; }
+
+#warehouse-stock tr[hidden] { display:none; }
+#warehouse-stock-filters .expense-cost-toggle { display:flex; align-items:center; min-height:40px; }
+@media(max-width:600px){.warehouse-table .expense-actions button{min-height:40px}}

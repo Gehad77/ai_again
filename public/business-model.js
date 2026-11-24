@@ -10,6 +10,10 @@ export function isDate(value) {
 export const isTargetPeriod = period => typeof period === 'string' &&
   /^[1-9]\d{3}-(?:0[1-9]|1[0-2]|Q[1-4])$/.test(period);
 
+export const validStockCount=count=>Number.isInteger(count)&&count>=0&&count<=2147483647;
+export const stockAlertThreshold=(product,settings)=>product.stock_alert_threshold??settings?.low_stock_threshold??10;
+export const isLowStock=(product,settings)=>product.stock<=stockAlertThreshold(product,settings);
+
 export function stockChange(product, input) {
   const {kind, delta, note} = input ?? {};
   if (!['restock', 'correction', 'writeoff'].includes(kind) ||

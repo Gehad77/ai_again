@@ -1,5 +1,5 @@
 import { pool } from './db.js';
-import { isMoney, expenseEntry, isTargetPeriod, stockChange } from './public/business-model.js';
+import { validStockCount, isMoney, expenseEntry, isTargetPeriod, stockChange } from './public/business-model.js';
 
 export async function recordSale(client, order, product) {
   const remaining = product.stock - order.quantity;
@@ -21,23 +21,26 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
         !isMoney(p.price) || (p.unit_cost != null && !isMoney(p.unit_cost))) {
       invalid('Enter a valid name, category, price and unit cost.');
     }
+    const threshold=p.stock_alert_threshold;
+    if(threshold!=null&&!validStockCount(threshold))invalid('Enter a whole-number stock alert threshold.');
     const fields = [p.name.trim(), p.category.trim(), p.price, p.unit_cost ?? null];
     if (product) {
       const result = await pool.query(
-        'UPDATE products SET name=$1,category=$2,price=$3,unit_cost=$4 WHERE id=$5 RETURNING *',
-        [...fields, product[1]]
+        `UPDATE products SET name=$1,category=$2,price=$3,unit_cost=$4,
+          stock_alert_threshold=CASE WHEN $7 THEN $6 ELSE stock_alert_threshold END WHERE id=$5 RETURNING *`,
+        [...fields, product[1], threshold??null, threshold!==undefined]
       );
       return json(res, result.rowCount ? 200 : 404, result.rows[0] ?? {error:'Product not found.'});
     }
-    if (!Number.isInteger(p.stock) || p.stock < 0 || p.stock > 2147483647) invalid('Enter valid opening stock.');
+    if (!validStockCount(p.stock)) invalid('Enter valid opening stock.');
     const result = await pool.query(`
       WITH added AS (
-        INSERT INTO products(id,name,category,price,unit_cost,stock,emoji,color)
-        VALUES(nextval('product_ids'),$1,$2,$3,$4,$5,'◇','#e5eee6') RETURNING *
+        INSERT INTO products(id,name,category,price,unit_cost,stock,emoji,color,stock_alert_threshold)
+        VALUES(nextval('product_ids'),$1,$2,$3,$4,$5,'◇','#e5eee6',$6) RETURNING *
       ), movement AS (
         INSERT INTO stock_movements(product_id,delta,stock_after,kind,unit_cost)
         SELECT id,stock,stock,'opening',unit_cost FROM added WHERE stock>0
-      ) SELECT * FROM added`, [...fields, p.stock]);
+      ) SELECT * FROM added`, [...fields, p.stock, threshold??null]);
     return json(res, 201, result.rows[0]);
   }
   if (product?.[2] && req.method === 'POST') {

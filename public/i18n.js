@@ -99,6 +99,18 @@ Monthly|شهري
 Quarterly|ربع سنوي
 Yearly|سنوي
 Low-stock alert threshold|حد تنبيه انخفاض المخزون
+Product stock alert threshold|حد تنبيه المخزون للمنتج
+Leave blank to use the workspace threshold.|سيبيها فاضية لاستخدام الحد العام للنشاط.
+Stock alert threshold|حد تنبيه المخزون
+Workspace default|الحد العام
+Out-of-stock products|المنتجات النافدة
+Out of stock|نفد المخزون
+Search stock|بحث في المخزون
+Product name or category|اسم المنتج أو تصنيفه
+Low stock only|عرض النواقص فقط
+Products shown|المنتجات المعروضة
+No products match these filters.|مفيش منتجات مطابقة للفلاتر.
+Enter a whole-number stock alert threshold.|اكتبي حد تنبيه المخزون كعدد قطع صحيح.
 At or below the configured stock threshold|عند حد التنبيه المحدد أو أقل منه
 Save settings|حفظ الإعدادات
 Settings saved|تم حفظ الإعدادات
