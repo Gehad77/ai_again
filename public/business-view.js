@@ -115,14 +115,20 @@ export function expensePage(data, esc, year, period){
   const categories = expenseBreakdown((data.expenses ?? [])).map(row => row.name)
     .filter(name => name !== 'Uncategorized' && !expenseCategories.includes(name));
   const breakdown = expenseBreakdown(report.expenses);
-  return `<div class="heading"><h1>Expenses</h1></div>
-  <section class="card recent business-card">
-    <div class="card-head"><div><h2>Expense ledger</h2><p>Track spending by category and product.</p></div>${periodControls(year,period)}</div>
-    <div class="metrics">
+  return `<div class="heading finance-heading"><div><h1>Expenses</h1><p>Track spending by category and product.</p></div>${periodControls(year,period)}</div>
+  <div class="metrics finance-summary">
       ${metric('Total recorded spending',usd(report.recordedExpenses))}
-      ${metric('Already in product costs',usd(report.includedCosts))}
-      ${metric('Expenses deducted separately',usd(report.overhead))}
-    </div>
+      ${metric('Paid sales',usd(report.revenue))}
+      ${metric(report.net<0?'Current net loss':'Current net result',usd(Math.abs(report.net)))}
+  </div>
+  <div class="page-actions" aria-label="Expense page sections">
+    <button class="primary" type="button" data-section="business-expense">Record expense</button>
+    <button type="button" data-section="business-target">Sales targets</button>
+    <button type="button" data-section="product-profit">Profit by product</button>
+    <button type="button" data-section="expense-breakdown">Spending breakdown</button>
+  </div>
+  <section class="card recent business-card" aria-labelledby="add-expense-title">
+    <div class="card-head"><div><h2 id="add-expense-title">Record expense</h2></div></div>
     <form id="business-expense" class="business-form">
       <label>Category<input name="category" list="expense-categories" maxlength="60" placeholder="Choose or type a category" required></label>
       <datalist id="expense-categories">${[...expenseCategories,...categories].map(name=>`<option value="${esc(name)}" label="${esc(translate(name))}"></option>`).join('')}</datalist>
@@ -136,6 +142,13 @@ export function expensePage(data, esc, year, period){
       <small id="expense-cost-note">Select this if the amount is already accounted for in the product cost used to calculate profit.</small>
       <p class="form-error" role="alert"></p>
     </form>
+  </section>
+  ${salesTargets(data,esc,year,period)}
+  ${productProfit(data,esc,period)}
+  <section class="card recent business-card" id="expense-breakdown">
+    <div class="card-head"><div><h2>Spending breakdown</h2></div></div>
+    <div class="metrics">${metric('Already in product costs',usd(report.includedCosts))}
+    ${metric('Expenses deducted separately',usd(report.overhead))}</div>
     <div class="table-wrap">
       <table><caption>Spending by category</caption><thead><tr><th>Category</th><th>Entries</th><th>Total spent</th></tr></thead><tbody>
       ${breakdown.map(row=>`<tr><td>${esc(row.name)}</td><td>${row.count}</td><td>${usd(row.total)}</td></tr>`).join('') || '<tr><td colspan="3">No recorded expenses this period.</td></tr>'}
@@ -153,9 +166,7 @@ export function expensePage(data, esc, year, period){
         <td>${e.included_in_product_cost?'Included in product cost':'Deducted separately'}</td><td><button data-delete-expense="${e.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="7">No recorded expenses this period.</td></tr>'}
       </tbody></table>
     </div>
-  </section>
-  ${salesTargets(data,esc,year,period)}
-  ${productProfit(data,esc,period)}`;
+  </section>`;
 }
 
 function salesTargets(data,esc,year,period){
@@ -176,14 +187,17 @@ function salesTargets(data,esc,year,period){
         ${products.map(p=>`<option data-user-content value="${p.id}" ${!report.units&&products.length===1?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>
       <button class="primary">Save targets</button><small>Enter zero to clear a target.</small><p class="form-error" role="alert"></p>
     </form>
-    <div class="metrics" id="sales-goal-result" role="status"></div>
+    <div id="sales-goal-result" aria-live="polite"></div>
   </section>`;
 }
 
-export function bindSalesTargets(data){
+export function bindSalesTargets(data, selectedProduct, selectProduct){
   const form=document.querySelector('#business-target');
   const result=document.querySelector('#sales-goal-result');
   const report=financials(data,form.elements.period.value);
+  const estimate=form.elements.estimate_product;
+  if([...estimate.options].some(option=>option.value===selectedProduct))estimate.value=selectedProduct;
+  estimate.onchange=()=>selectProduct(estimate.value);
   const displayMoney=value=>value===null?'—':usd(value);
   const displayUnits=value=>value===null?'—':value.toLocaleString(locale());
   const update=()=>{
@@ -191,17 +205,25 @@ export function bindSalesTargets(data){
     const product=data.products.find(p=>p.id===Number(form.elements.estimate_product.value));
     const plan=salesPlan(report,target,product);
     const basis=product?'At the selected product price and unit cost':'At the average recorded price and margin';
-    result.innerHTML=[
-      metric('Paid sales',usd(report.revenue)),metric('Units sold',displayUnits(report.units)),
-      metric('Revenue still needed',target.amount>0?usd(plan.revenueRemaining):'—'),
-      metric('Units left for unit target',target.units>0?displayUnits(plan.unitsRemaining):'—'),
-      metric('Extra units for revenue target',target.amount>0?displayUnits(plan.unitsForRevenue):'—',basis),
-      metric('Total sales to cover expenses',displayMoney(plan.coverRevenue),basis),
-      metric('Total sales to start making a profit',displayMoney(plan.profitRevenue),basis),
-      metric('Extra units to break even',displayUnits(plan.extraUnitsToCover)),
-      metric('Extra units to start making a profit',displayUnits(plan.extraUnitsToProfit)),
-      metric(report.net<0?'Current net loss':report.net>0?'Current net profit':'Current net result',usd(Math.abs(report.net)))
-    ].join('')+ (plan.coverRevenue===null?'<p class="notice">Select a product with a price and a positive unit margin, or record profitable sales, to estimate break-even.</p>':'');
+    result.innerHTML=`<div class="target-panel">
+      <h3>Progress toward your targets</h3>
+      <div class="metrics">${[
+        metric('Paid sales',usd(report.revenue)),
+        metric('Units sold',displayUnits(report.units)),
+        metric('Revenue still needed',target.amount>0?usd(plan.revenueRemaining):'—'),
+        metric('Units left for unit target',target.units>0?displayUnits(plan.unitsRemaining):'—'),
+        metric('Extra units for revenue target',target.amount>0?displayUnits(plan.unitsForRevenue):'—',basis)
+      ].join('')}</div>
+      <h3>Covering costs and making a profit</h3>
+      <div class="metrics">${[
+        metric('Total sales to cover expenses',displayMoney(plan.coverRevenue),basis),
+        metric('Total sales to start making a profit',displayMoney(plan.profitRevenue),basis),
+        metric('Extra units to break even',displayUnits(plan.extraUnitsToCover)),
+        metric('Extra units to start making a profit',displayUnits(plan.extraUnitsToProfit)),
+        metric(report.net<0?'Current net loss':report.net>0?'Current net profit':'Current net result',usd(Math.abs(report.net)))
+      ].join('')}</div>
+      ${plan.coverRevenue===null?'<p class="notice">Select a product with a price and a positive unit margin, or record profitable sales, to estimate break-even.</p>':''}
+    </div>`;
   };
   form.oninput=()=>{if(form.checkValidity())update();};
   update();
@@ -210,7 +232,7 @@ export function bindSalesTargets(data){
 function productProfit(data,esc,period){
   const rows=productResults(data,period);
   const report=financials(data,period);
-  return `<section class="card recent business-card">
+  return `<section class="card recent business-card" id="product-profit">
     <div class="card-head"><div><h2>Profit by product</h2>
     <p>Product results deduct recorded unit costs and linked expenses. General expenses are deducted in the business net result.</p></div></div>
     <div class="metrics">${metric('Gross profit from all products',usd(report.gross))}

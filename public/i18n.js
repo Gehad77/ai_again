@@ -1,5 +1,15 @@
 const translations = new Map(`
 Overview|نظرة عامة
+Dashboard|لوحة التحكم
+Store operations|إدارة النشاط
+Customer channels|العملاء والقنوات
+Workspace administration|إدارة مساحة العمل
+Workspace navigation|أقسام مساحة العمل
+Menu|القائمة
+Expense page sections|أقسام المصروفات
+Spending breakdown|تفصيل المصروفات
+Progress toward your targets|التقدم نحو أهدافك
+Covering costs and making a profit|تغطية المصاريف وتحقيق الربح
 Inbox|صندوق الرسائل
 Customers|العملاء
 Products|المنتجات

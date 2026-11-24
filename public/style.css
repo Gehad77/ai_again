@@ -38,3 +38,70 @@
 #currency-change-note { flex-basis:100%; }
 #currency-change-note small { display:block; margin-top:8px; }
 #sales-goal-result:empty, #workspace-form .form-error:empty, #business-target .form-error:empty { display:none; }
+
+/* Owner navigation and financial reports */
+#workspace-sidebar { overflow-y:auto; }
+.sidebar-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+#nav-toggle { display:none; }
+#workspace-sidebar .workspace { cursor:default; text-align:start; margin-block:20px 12px; }
+#workspace-sidebar .workspace b { overflow-wrap:anywhere; }
+.nav-group + .nav-group { margin-block-start:14px; }
+.nav-group h2 { margin:0 0 5px; padding-inline:12px; color:#56665c; font-size:11px; font-weight:650; }
+#workspace-nav .nav-item { text-align:start; padding:9px 12px; min-height:40px; }
+#workspace-nav .nav-item[aria-current="page"] { box-shadow:inset 0 0 0 1px #d5e5d9; }
+.page-path { overflow-wrap:anywhere; min-width:0; }
+.header-right #signout { min-height:36px; white-space:nowrap; font-size:.82rem; padding:8px 12px; border:1px solid var(--border); }
+.finance-heading { display:flex; align-items:end; justify-content:space-between; flex-wrap:wrap; gap:14px; }
+.finance-heading h1 { margin-block-end:6px; }
+.finance-heading p { margin-block-end:0; }
+.finance-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.finance-summary .metric { background:#f8fcf9; border-color:#dbeade; }
+.page-actions { display:flex; gap:8px; flex-wrap:wrap; padding:0; margin:0 0 22px; }
+.page-actions button { min-height:42px; }
+.business-form label { min-width:0; }
+.business-form input:not([type="checkbox"]), .business-form select, .business-controls input, .business-controls select {
+ color:#203127; border:1px solid #cad8ce; background:#fff; border-radius:8px;
+ font:inherit; padding:9px 10px; min-height:40px; max-width:100%;
+}
+.business-form input:focus-visible, .business-form select:focus-visible, .business-controls input:focus-visible,
+.business-controls select:focus-visible, #workspace-nav button:focus-visible, .page-actions button:focus-visible {
+ outline:2px solid #276447; outline-offset:2px;
+}
+.target-panel h3 { font-size:1rem; margin:20px 20px 0; }
+.target-panel .metrics { grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr)); }
+.target-panel .notice { margin:0 20px; }
+#business-target, #product-profit, #expense-breakdown { scroll-margin-top:80px; }
+
+@media(max-width:900px){
+ #workspace-sidebar.sidebar { position:sticky; inset:0 0 auto; top:0; z-index:4; width:auto; height:auto;
+  display:block; max-height:85dvh; padding:8px 16px; border:0; border-bottom:1px solid var(--border); }
+ #workspace-sidebar .brand { font-size:24px; }
+ #workspace-sidebar .brand-icon { display:inline-grid; }
+ #workspace-sidebar .workspace { display:none; }
+ #nav-toggle { display:inline-flex; align-items:center; justify-content:center; min-height:40px; }
+ #workspace-sidebar:has(#nav-toggle[aria-expanded="false"]) #workspace-nav { display:none; }
+ #workspace-nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-block:12px; }
+ #workspace-nav .nav-group { margin:0; }
+ #workspace-nav .nav-item { font-size:.9rem; }
+ .main, [dir="rtl"] .main { margin:0; }
+}
+@media(max-width:600px){
+ .page-actions button { flex:1 1 42%; }
+ .finance-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .finance-summary .metric:last-child { grid-column:1 / -1; }
+ #business-expense label, #business-target label { flex:1 1 140px; }
+ #business-expense label.expense-cost-toggle { flex-basis:100%; }
+ .target-panel .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .target-panel .metric strong { overflow-wrap:anywhere; }
+}
+@media(max-width:600px){
+ .business-form input:not([type="checkbox"]), .business-form select { width:100%; min-width:0; }
+}
+@media(max-width:900px){
+ #workspace-nav .nav-group:first-child, #workspace-nav .nav-group:last-child { grid-column:1 / -1; }
+}
+@media(max-width:600px){
+ .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .metric { min-width:0; }
+ .metric strong { overflow-wrap:anywhere; }
+}

@@ -13,7 +13,7 @@ const badge=s=>`<span class="badge ${s==='High intent'||s==='Converted'||s==='Pu
 const filtered=()=>state.data.conversations.filter(c=>(state.filter==='All channels'||c.channel===state.filter)&&`${c.name} ${c.product}`.toLowerCase().includes(state.search.toLowerCase()));
 function table(){return `<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Channel</th><th>Product interest</th><th>Buying signal</th><th>Status</th><th></th></tr></thead><tbody>${filtered().map(c=>`<tr data-chat="${c.id}" tabindex="0"><td><div class="person"><span class="avatar" style="background:${c.color}">${esc(c.initials)}</span><span><b data-user-content>${esc(c.name)}</b><small></small></span></div></td><td>${channel(c.channel)} ${c.channel}</td><td>${esc(c.product)}</td><td>${badge(c.intent)}</td><td><span class="dot ${c.status==='AI handling'?'purple':''}"></span>${c.status}</td><td>↗</td></tr>`).join('')||'<tr><td colspan="6">No conversations match your search.</td></tr>'}</tbody></table></div>`;}
 function filters(){return `<div class="filters"><div class="tabs">${['All channels','WhatsApp','Instagram','Messenger','Website'].map(x=>`<button class="${state.filter===x?'active':''}" data-filter="${x}">${x==='All channels'?'':channel(x)}${x}</button>`).join('')}</div><input id="search" placeholder="⌕ Search conversations" value="${esc(state.search)}" aria-label="Search conversations"></div>`;}
-function overview(){return `<div class="heading"><h1>Business overview</h1></div><div class="top-actions"><span class="live-dot"></span> Live overview <button data-create="product">+ Add product</button><button id="export">↗ Export report</button></div><div class="metrics">${[['Total conversations',String(state.data.conversations.length),'Social and account history','↗','mint'],['Interested customers',String(state.data.conversations.filter(c=>c.intent==='High intent').length),'Customers showing high buying intent','♧','lavender'],['Paid orders',String((state.data.orders||[]).filter(o=>o.status==='Paid').length),'Confirmed order records','▣','peach'],['Needs your attention',String(state.data.conversations.filter(c=>c.status==='Needs reply').length),'Conversations waiting for a reply','◷','yellow']].map(([label,n,sub,icon,color])=>`<article class="metric"><div>${label}<span class="metric-icon ${color}">${icon}</span></div><strong>${n}</strong><small>${sub}</small></article>`).join('')}</div>${warehouseSummary(state.data,esc)}<section class="card recent"><div class="card-head"><div><h2>Recent conversations</h2></div><button data-go="inbox">View inbox ↗</button></div>${filters()}${table()}</section>`;}
+function overview(){return `<div class="heading"><h1>Business overview</h1></div><div class="top-actions"><button class="primary" data-create="product">+ Add product</button><button data-go="expenses" data-jump="business-expense">Record expense</button><button data-go="inbox">View inbox ↗</button><button id="export">↗ Export report</button></div><div class="metrics">${[['Total conversations',String(state.data.conversations.length),'Social and account history','↗','mint'],['Interested customers',String(state.data.conversations.filter(c=>c.intent==='High intent').length),'Customers showing high buying intent','♧','lavender'],['Paid orders',String((state.data.orders||[]).filter(o=>o.status==='Paid').length),'Confirmed order records','▣','peach'],['Needs your attention',String(state.data.conversations.filter(c=>c.status==='Needs reply').length),'Conversations waiting for a reply','◷','yellow']].map(([label,n,sub,icon,color])=>`<article class="metric"><div>${label}<span class="metric-icon ${color}">${icon}</span></div><strong>${n}</strong><small>${sub}</small></article>`).join('')}</div>${warehouseSummary(state.data,esc)}<section class="card recent"><div class="card-head"><div><h2>Recent conversations</h2></div><button data-go="inbox">View inbox ↗</button></div>${filters()}${table()}</section>`;}
 function products(){return `<div class="heading"><div class="eyebrow">YOUR CATALOG</div><h1>Product catalog</h1><p></p></div><button class="primary create-action" data-create="product">+ Add product</button><div class="product-grid">${state.data.products.map(p=>`<article class="card product"><div class="product-art" style="background:${p.color}">${p.emoji}</div><small>${esc(p.category)}</small><h2>${esc(p.name)}</h2><div class="product-bottom"><strong>$${p.price.toFixed(2)}</strong>${badge(p.stock<10?'Low stock':p.stock+' in stock')}</div><p>${state.data.conversations.filter(c=>c.product===p.name).length} customer inquiries · ${(state.data.orders||[]).filter(o=>o.product_id===p.id&&o.status==='Paid').reduce((s,o)=>s+o.quantity,0)} units sold</p></article>`).join('')}</div>`;}
 function customers(){return `<div class="heading"><div class="eyebrow">PEOPLE, NOT JUST LEADS</div><h1>Meet your customers.</h1><p>Website customer accounts and conversation activity.</p></div><section class="card recent" id="customer-accounts"></section><section class="card">${filters()}${table()}</section>`;}
 const money=formatMoney;
@@ -47,8 +47,51 @@ function settings(){
  <button class="primary">Save settings</button><p role="alert" class="form-error"></p></form></section>`;
 }
 async function inbox(){const c=state.data.conversations.find(x=>x.id===state.selected)||state.data.conversations[0];if(!c){$('#page').innerHTML='<div class="heading"><h1>Your inbox is ready.</h1><p>Connect a social account to receive messages here.</p><button id="refresh-inbox">Refresh inbox</button></div>';$('#refresh-inbox').onclick=async()=>{state.data=await api('/api/overview');await inbox();};return;}state.selected=c.id;const messages=await api(`/api/conversations/${c.id}`);if(state.page!=='inbox')return;$('#page').innerHTML=`<div class="heading"><h1>Social inbox</h1><p>Incoming text messages from connected accounts.</p></div><div class="top-actions"><button id="refresh-inbox">Refresh inbox</button><button class="primary" data-create="order">+ Create order from chat</button></div><div class="inbox-layout card"><aside class="threads">${state.data.conversations.map(x=>`<button data-chat="${x.id}" class="thread ${x.id===c.id?'selected':''}"><span class="avatar" style="background:${x.color}">${esc(x.initials)}</span><span><b data-user-content>${esc(x.name)}</b><small>${x.channel} · ${x.status}</small></span></button>`).join('')}</aside><div class="chat"><div class="chat-head"><div class="person"><span class="avatar" style="background:${c.color}">${esc(c.initials)}</span><div><b data-user-content>${esc(c.name)}</b><small>${esc(c.channel)} · ${esc(c.product)}</small></div></div><select id="status" aria-label="Conversation status">${['Needs reply','AI handling','Converted','Inactive'].map(s=>`<option ${s===c.status?'selected':''}>${s}</option>`).join('')}</select></div><div class="messages"> <div class="chat-date">CONVERSATION</div>${messages.map(m=>`<div class="bubble ${m.role==='customer'?'incoming':'outgoing'}"><small>${m.role==='customer'?esc(c.name):m.role==='agent'?'You':'Order assistant'}</small><div data-user-content dir="auto">${esc(m.body)}</div></div>`).join('')}</div><div class="inbox-orders">${(state.data.orders||[]).filter(o=>o.conversation_id===c.id).map(o=>`<div>Order #${o.id} · ${o.quantity} items · ${money(o.quantity*o.unit_price)} · ${esc(o.status)} ${o.status==='Pending'?`<button data-confirm-order="${o.id}" class="primary">Confirm payment</button>`:''}</div>`).join('')}</div></div></div>`;$('#refresh-inbox').onclick=async()=>{try{state.data=await api('/api/overview');await inbox();}catch(e){toast(e.message);}};$('#status').onchange=async e=>{try{await api(`/api/conversations/${c.id}`,{method:'PATCH',body:JSON.stringify({status:e.target.value})});state.data=await api('/api/overview');toast('Conversation updated');}catch(e){toast(e.message);}};}
-function render(){ setCurrency(state.data.currency); $('#app').innerHTML=`<aside class="sidebar"><a class="brand" href="./" aria-label="Relay home"><span class="brand-icon">r</span>relay<span class="brand-period">.</span></a><button class="workspace" id="workspace"><span class="store-icon">▧</span><span><b data-user-content>${esc(state.data.workspace)}</b></span><span>⌄</span></button><div class="nav-label">WORKSPACE</div><nav>${Object.entries(icons).filter(([k])=>k!=='settings').map(([k,v])=>`<button data-go="${k}" class="nav-item ${state.page===k?'active':''}"><span>${v}</span>${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</nav><div class="sidebar-bottom"><button data-go="settings" class="nav-item">⚙ <span>Settings</span></button><div class="profile"><span class="avatar">JD</span><div><button data-go="profile">Business profile</button><small>Workspace owner</small></div><span>⌄</span></div></div></aside><div class="main"><header><div><span class="breadcrumb" data-user-content>${esc(state.data.workspace)}</span><span class="slash">/</span>${state.page[0].toUpperCase()+state.page.slice(1)}</div><div class="header-right"><button id="signout">Sign out</button><span class="avatar mini">JD</span></div></header><main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='settings'?settings():''}</main></div>`;if(state.page==='inbox')inbox().catch(e=>toast(e.message));bind();}
+const navigationGroups = [
+ ['Dashboard', ['overview']],
+ ['Store operations', ['products','profile','expenses','analytics']],
+ ['Customer channels', ['inbox','customers','integrations']],
+ ['Workspace administration', ['settings']]
+];
+
+function navigation(){
+ const labels={profile:'Business profile',integrations:'Social accounts'};
+ return navigationGroups.map(([label,pages])=>`<section class="nav-group">
+ ${pages[0]==='overview'?'':`<h2>${label}</h2>`}
+ ${pages.map(page=>`<button type="button" data-go="${page}" class="nav-item ${state.page===page?'active':''}"
+ ${state.page===page?'aria-current="page"':''}><span aria-hidden="true">${icons[page]}</span>${labels[page]??page[0].toUpperCase()+page.slice(1)}</button>`).join('')}
+ </section>`).join('');
+}
+
+function render(){
+ setCurrency(state.data.currency);
+ document.title=state.data.workspace+' · Relay';
+ $('#app').innerHTML=`
+ <aside class="sidebar" id="workspace-sidebar">
+  <div class="sidebar-heading">
+   <a class="brand" href="./" aria-label="Relay home"><span class="brand-icon">r</span>relay<span class="brand-period">.</span></a>
+   <button id="nav-toggle" type="button" aria-controls="workspace-nav" aria-expanded="false">Menu</button>
+  </div>
+  <div class="workspace"><span class="store-icon" aria-hidden="true">▧</span><b data-user-content>${esc(state.data.workspace)}</b></div>
+  <nav id="workspace-nav" aria-label="Workspace navigation">${navigation()}</nav>
+ </aside>
+ <div class="main">
+  <header><div class="page-path"><span class="breadcrumb" data-user-content>${esc(state.data.workspace)}</span><span class="slash">/</span>${state.page[0].toUpperCase()+state.page.slice(1)}</div>
+   <div class="header-right"><button id="signout">Sign out</button></div></header>
+  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='settings'?settings():''}</main>
+ </div>`;
+ if(state.page==='inbox')inbox().catch(e=>toast(e.message));
+ bind();
+}
 function bind(){
+const navToggle=$('#nav-toggle');
+navToggle.onclick=()=>{navToggle.setAttribute('aria-expanded',String(navToggle.getAttribute('aria-expanded')!=='true'));};
+$('#workspace-sidebar').onkeydown=event=>{
+ if(event.key==='Escape'&&navToggle.getAttribute('aria-expanded')==='true'){
+  navToggle.setAttribute('aria-expanded','false');
+  navToggle.focus();
+ }
+};
 if(['profile','expenses'].includes(state.page))bindBusinessProfile();
 if(state.page==='customers')loadCustomerAccounts();
 if(state.page==='settings'){
@@ -82,11 +125,25 @@ if($('#analytics-period'))$('#analytics-period').onchange=e=>{state.analyticsDay
 if($('#analytics-channel'))$('#analytics-channel').onchange=e=>{state.analyticsChannel=e.target.value;render();};
 if($('#analytics-export'))$('#analytics-export').onclick=()=>{const a=analyze(state.data,{days:state.analyticsDays||0,channel:state.analyticsChannel||'All channels'});const rows=[['Product','Price','Stock left','Units sold','Revenue','Gross profit','Inquiries','Inactive chats','Price concerns'],...a.products.map(p=>[p.name,p.price,p.stock,p.units,p.revenue,p.profit,p.inquiries,p.inactive,p.priceConcerns])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n');const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));link.download='relay-product-analysis.csv';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);};
 const s=$('#search');if(s)s.oninput=e=>{state.search=e.target.value;const pos=e.target.selectionStart;render();$('#search').focus();$('#search').setSelectionRange(pos,pos);};if($('#export'))$('#export').onclick=()=>{const csv=['Customer,Channel,Product,Status',...state.data.conversations.map(c=>[c.name,c.channel,c.product,c.status].map(v=>'"'+v.replaceAll('"','""')+'"').join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='relay-conversations.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};}
-document.addEventListener('click',e=>{const confirmOrder=e.target.closest('[data-confirm-order]');if(confirmOrder)confirmPayment(Number(confirmOrder.dataset.confirmOrder));const create=e.target.closest('[data-create]');if(create)openCreate(create.dataset.create);
+function focusPage(){
+ const heading=$('#page h1');
+ if(!heading)return;
+ heading.tabIndex=-1;
+ heading.focus({preventScroll:true});
+ window.scrollTo(0,0);
+}
+function jumpToSection(id){
+ const target=document.getElementById(id);
+ if(!target)return;
+ target.scrollIntoView({block:'start'});
+ target.tabIndex=-1;
+ target.focus({preventScroll:true});
+}
+document.addEventListener('click',e=>{const jump=e.target.closest('[data-section]');if(jump)jumpToSection(jump.dataset.section);const confirmOrder=e.target.closest('[data-confirm-order]');if(confirmOrder)confirmPayment(Number(confirmOrder.dataset.confirmOrder));const create=e.target.closest('[data-create]');if(create)openCreate(create.dataset.create);
 const edit=e.target.closest('[data-edit-product]');
 if(edit)openCreate('product',state.data.products.find(p=>p.id===Number(edit.dataset.editProduct)));
 const stock=e.target.closest('[data-stock-product]');
-if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();}if(chat){state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
+if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.jump)jumpToSection(go.dataset.jump);else focusPage();}if(chat){state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('tr[data-chat]'))e.target.click();});
 
 async function loadCustomerAccounts(){
@@ -259,7 +316,7 @@ async function refreshBusiness(message){
 
 function bindBusinessProfile(){
  if(state.page==='profile')bindPricingCalculator(state.data);
- bindSalesTargets(state.data);
+ bindSalesTargets(state.data,state.estimateProduct,id=>{state.estimateProduct=id;});
  $('#business-year').onchange=e=>{
   if(!e.target.value||!e.target.checkValidity())return;
   state.businessYear=e.target.value;
