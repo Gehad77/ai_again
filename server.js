@@ -77,6 +77,18 @@ export const server=http.createServer(async(req,res)=>{
  if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
  }
+ const resumeChat=route.match(/^\/api\/chats\/(\d{1,10})\/resume-ai$/);
+ if(resumeChat&&Number(resumeChat[1])<=2147483647&&req.method==='POST'){
+  const client=await pool.connect();
+  try{
+   await client.query('BEGIN');
+   await client.query('UPDATE ai_chat_jobs SET reply_requested=false WHERE conversation_id=$1',[resumeChat[1]]);
+   await client.query("UPDATE chat_analysis SET human_review=false,review_reason='' WHERE conversation_id=$1",[resumeChat[1]]);
+   await client.query('COMMIT');
+   return json(res,200,{ok:true});
+  }catch(error){await client.query('ROLLBACK');throw error;}
+  finally{client.release();}
+ }
  if(route==='/api/chats/analyze'&&req.method==='POST'){
   if(!aiConfigured())return json(res,503,{error:'Configure AI chat before analyzing conversations.'});
   return json(res,202,{queued:await queueHistory()});

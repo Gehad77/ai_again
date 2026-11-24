@@ -59,12 +59,19 @@ const analysisTerms={
 };
 const analysisLabel=value=>analysisTerms[value]??value;
 
-function chatAnalysisCard(id){
+function chatAnalysisCard(id,channel){
  const analysis=state.data.chatAnalysis?.find(row=>row.conversation_id===id);
  const job=state.data.chatJobs?.find(row=>row.conversation_id===id);
  const status=!state.data.aiConfigured?'':job?.state==='failed'?'Needs review':['pending','working'].includes(job?.state)?'Analysis queued':'';
  return `<section class="chat-analysis"><h2>Conversation analysis</h2>
  ${status?`<p>${status}</p>`:''}
+ ${analysis?.human_review?`<div class="notice"><strong>Human review required</strong>
+ <p data-user-content dir="auto">${esc(analysis.review_reason)}</p>
+ ${channel==='Website'?`<form id="human-chat-reply" class="business-form">
+ <label>Your reply<textarea name="body" maxlength="4000" required></textarea></label>
+ <button type="submit">Send reply</button><p class="form-error" role="alert"></p></form>`:
+ '<p>Reply to the customer in the original channel before resuming AI.</p>'}
+ <button type="button" id="resume-chat-ai" data-conversation="${id}">Resume AI for new messages</button></div>`:''}
  ${analysis?`<div class="analysis-tags">${badge(analysisLabel(analysis.intent))}${badge(analysisLabel(analysis.stage))}</div>
  <p data-user-content dir="auto">${esc(analysis.summary)}</p>
  ${analysis.themes?.length?`<ul>${analysis.themes.map(theme=>`<li data-user-content dir="auto">${esc(theme)}</li>`).join('')}</ul>`:''}`:'<p>No analysis yet.</p>'}</section>`;
@@ -133,12 +140,32 @@ async function inbox(){
  ${messages.map(m=>`<div class="bubble ${m.role==='customer'?'incoming':'outgoing'}">
  <small>${m.role==='customer'?esc(c.name):m.role==='agent'?'You':'AI assistant'}</small>
  <div data-user-content dir="auto">${esc(m.body)}</div></div>`).join('')}</div>
- ${chatAnalysisCard(c.id)}
+ ${chatAnalysisCard(c.id,c.channel)}
  <div class="inbox-orders">${(state.data.orders??[]).filter(o=>o.conversation_id===c.id).map(o=>`<div>Order #${o.id} · ${o.quantity} · ${money(o.quantity*o.unit_price)} · ${esc(o.status)}
  ${o.status==='Pending'?`<button data-confirm-order="${o.id}" class="primary">Confirm payment</button>`:''}</div>`).join('')}</div></div></div>`;
  if(state.focusThread===c.id){$('.threads [aria-current="true"]').focus({preventScroll:true});state.focusThread=null;}
  addContextGuide('inbox');
  bindControls();
+ const humanReply=$('#human-chat-reply');
+ if(humanReply)humanReply.onsubmit=async event=>{
+  event.preventDefault();
+  const button=humanReply.querySelector('button');
+  button.disabled=true;
+  try{
+   await api('/api/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({body:humanReply.elements.body.value})});
+   await refreshInbox(true);
+   toast('Reply sent');
+  }catch(error){humanReply.querySelector('[role=alert]').textContent=error.message;button.disabled=false;}
+ };
+ const resume=$('#resume-chat-ai');
+ if(resume)resume.onclick=async()=>{
+  resume.disabled=true;
+  try{
+   await api('/api/chats/'+resume.dataset.conversation+'/resume-ai',{method:'POST'});
+   await refreshInbox(true);
+   toast('AI resumed for new messages');
+  }catch(error){toast(error.message);resume.disabled=false;}
+ };
  $('#status').onchange=async e=>{
   try{await api(`/api/conversations/${c.id}`,{method:'PATCH',body:JSON.stringify({status:e.target.value})});state.data=await api('/api/overview');toast('Conversation updated');}
   catch(e){toast(e.message);}
@@ -729,4 +756,4 @@ new MutationObserver(records=>{
 }).observe(document.body,{childList:true,subtree:true});
 await boot();
 
-setInterval(()=>{if(!document.hidden&&state.page==='inbox'&&document.activeElement?.tagName!=='SELECT')void refreshInbox();},8000);
+setInterval(()=>{if(!document.hidden&&state.page==='inbox'&&!document.activeElement?.matches('select,textarea,input'))void refreshInbox();},8000);

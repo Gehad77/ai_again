@@ -78,6 +78,9 @@ export async function initialize(){
   intent TEXT NOT NULL, stage TEXT NOT NULL, summary TEXT NOT NULL, themes JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
  );
+ ALTER TABLE chat_analysis
+  ADD COLUMN IF NOT EXISTS human_review BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS review_reason TEXT NOT NULL DEFAULT '';
  CREATE TABLE IF NOT EXISTS social_deliveries(
   channel TEXT NOT NULL, account TEXT NOT NULL, message_id TEXT NOT NULL,
   PRIMARY KEY(channel, account, message_id)

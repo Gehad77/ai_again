@@ -142,7 +142,9 @@ test('unified inbox analyzes all four channels and sends only one configured rep
    assert(!input.catalog.some(item=>'unit_cost' in item));
    return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({
     intent:'pricing',stage:'interested',summary:'Asked for a price.',themes:['price'],
-    reply:input.replyRequested?'Thanks for your message.':''
+    reply:input.replyRequested?'Thanks for your message.':'',
+    humanReview:input.replyRequested&&input.messages.some(message=>message.body==='Refund dispute'),
+    reviewReason:'Staff should review the refund request.'
    })}]}]});
   }
   assert.match(url,/^https:\/\/graph\.(?:facebook|instagram)\.com\/v23\.0\//);
@@ -195,6 +197,25 @@ test('unified inbox analyzes all four channels and sends only one configured rep
   assert(deliveries.some(entry=>entry.url.includes('/804/')&&entry.body.messaging_type==='RESPONSE'));
   for(const account of ['802','803','804'])assert.equal(deliveries.filter(entry=>entry.url.includes('/'+account+'/')).length,1);
   assert(inputs.some(input=>input.replyRequested===false&&input.messages.some(message=>message.role==='customer')));
+  const postMessenger=async (mid,text)=>{
+   const body=JSON.stringify({object:'page',entry:[{id:'804',messaging:[{sender:{id:'904'},message:{mid,text}}]}]});
+   const signature='sha256='+createHmac('sha256',env.META_APP_SECRET).update(body).digest('hex');
+   assert.equal((await rawFetch(base+'/api/social/webhook',{method:'POST',body,headers:{'x-hub-signature-256':signature}})).status,200);
+   assert(await processChatJob());
+  };
+  const thread=data.conversations.find(c=>c.name==='Messenger · 904');
+  const sent=()=>deliveries.filter(entry=>entry.url.includes('/804/')).length;
+  await postMessenger('refund-case','Refund dispute');
+  const {chatAnalysis}=await (await fetch(base+'/api/overview')).json();
+  assert.equal(chatAnalysis.find(row=>row.conversation_id===thread.id).human_review,true);
+  await postMessenger('followup-held','Still waiting');
+  assert.equal(sent(),2);
+  const resume=base+'/api/chats/'+thread.id+'/resume-ai';
+  assert.equal((await rawFetch(resume,{method:'POST'})).status,401);
+  assert.equal((await fetch(resume,{method:'POST'})).status,200);
+  assert.equal(await processChatJob(),false);
+  await postMessenger('followup-resumed','How much?');
+  assert.equal(sent(),3);
  }finally{
   globalThis.fetch=rawFetch;
   for(const key of Object.keys(env))delete process.env[key];

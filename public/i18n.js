@@ -64,6 +64,13 @@ Stage|المرحلة
 Summary|الملخص
 Conversation analysis|تحليل المحادثة
 Needs review|تحتاج مراجعة
+Human review required|العميل محتاج متابعة من فريق المتجر
+Your reply|ردّك
+Send reply|إرسال الرد
+Reply sent|تم إرسال الرد
+Reply to the customer in the original channel before resuming AI.|ردّي على العميل من القناة الأصلية قبل تشغيل الرد الآلي تاني.
+Resume AI for new messages|تشغيل الرد الآلي للرسائل الجديدة
+AI resumed for new messages|الرد الآلي اتفعّل للرسائل الجديدة
 Analysis queued|التحليل في الانتظار
 No analysis yet.|لسه مفيش تحليل.
 Insights refreshed|تم تحديث التحليل

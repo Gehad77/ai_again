@@ -12,7 +12,7 @@ To receive texts from Meta, set a Render secret `META_APP_SECRET` from your Meta
 
 ### AI replies and customer insights
 
-Set `AI_CHAT_ENABLED=1` and `OPENAI_API_KEY` to enable the worker. `OPENAI_CHAT_MODEL` defaults to `gpt-4.1-mini`. The worker uses the OpenAI Responses API for text replies and structured analysis. It uses the recent public-facing catalog for product facts and excludes wholesale costs and other customers' records. Chat text is sent to the AI provider when enabled. Update your customer privacy notices before enabling the feature.
+Set `AI_CHAT_ENABLED=1` and `OPENAI_API_KEY` to enable the worker. `OPENAI_CHAT_MODEL` defaults to `gpt-4.1-mini`. The worker uses the OpenAI Responses API for text replies and structured analysis. Refund disputes, explicit requests for a person and other cases requiring staff action can pause automated replies for that conversation. After handling the case in its original channel, use **Resume AI for new messages** in the inbox. This never replays old messages. It uses the recent public-facing catalog for product facts and excludes wholesale costs and other customers' records. Chat text is sent to the AI provider when enabled. Update your customer privacy notices before enabling the feature.
 
 To send social replies, set `META_GRAPH_VERSION` to a version supported by your Meta app and set the appropriate channel tokens:
 
