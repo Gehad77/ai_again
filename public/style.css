@@ -199,3 +199,9 @@
 #warehouse-stock tr[hidden] { display:none; }
 #warehouse-stock-filters .expense-cost-toggle { display:flex; align-items:center; min-height:40px; }
 @media(max-width:600px){.warehouse-table .expense-actions button{min-height:40px}}
+
+#restock-plan { scroll-margin-top:80px; }
+.attention-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr)); gap:10px; margin:14px 20px; }
+.attention-list button { display:grid; text-align:start; gap:8px; min-height:64px; }
+.attention-list strong { color:#245b46; }
+#cash-movement-form .form-error:empty { display:none; }

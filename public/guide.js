@@ -25,6 +25,10 @@ const sections={
   ['Expenses and targets','المصروفات والأهداف'],
   ['Record amounts you spend and link direct expenses to a product when useful. Mark amounts already included in product cost so they still show in spending but are not deducted twice. You can correct an entry in the expense list, download the period report for review, and track revenue and unit goals separately. For each product, set a monthly target or set a quarterly target to override the sum of its monthly goals.','سجّلي اللي صرفتيه واربطي المصروف المباشر بالمنتج لو مناسب. علّمي على أي مبلغ دخل بالفعل في تكلفة المنتج عشان يظهر في الصرف من غير خصمه مرتين. تقدري تصحّحي القيد من جدول المصروفات، وتنزّلي تقرير الفترة للمراجعة، وتتابعي هدف الإيراد وعدد القطع كل واحد لوحده. حددي لكل منتج هدف شهري، أو هدف ربع سنوي ياخد الأولوية على مجموع الأهداف الشهرية.']
  ],
+ cash:[
+  ['Cash flow','السيولة النقدية'],
+  ['See paid sales and recorded expenses as cash movements. Opening cash is the net of recorded entries before the selected period. Add deposits and withdrawals here once, and record a real inventory payment as an expense.','المبيعات المدفوعة والمصروفات المسجّلة بتظهر كحركات نقدية. رصيد أول الفترة هو صافي القيود السابقة. سجّلي الإيداع والسحب هنا مرة واحدة، وأي مبلغ مدفوع للمخزون سجّليه كمصروف.']
+ ],
  taxes:[
   ['Taxes','الضرائب'],
   ['Use this page to plan an income-tax reserve at a rate you supply. Record actual income-tax payments under Income tax in Expenses for the same period. Other business taxes can be tracked as separate expenses.','استخدمي الصفحة لعمل احتياطي لضريبة الدخل بالنسبة اللي تدخليها. سجّلي مدفوعات ضريبة الدخل الفعلية في المصروفات تحت تصنيف ضريبة الدخل للفترة نفسها. تقدري تسجّلي الضرائب التانية كمصروفات منفصلة.']

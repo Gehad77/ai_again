@@ -32,6 +32,7 @@ export async function initialize(){
  ALTER TABLE customers ALTER COLUMN registered_at SET DEFAULT CURRENT_TIMESTAMP;`);
  await c.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12,2) CHECK(unit_cost>=0);
  ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_alert_threshold INTEGER CHECK(stock_alert_threshold>=0);
+ ALTER TABLE products ADD COLUMN IF NOT EXISTS desired_stock INTEGER CHECK(desired_stock>=0);
  ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
  CREATE TABLE IF NOT EXISTS stock_movements(
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -85,6 +86,11 @@ export async function initialize(){
   period TEXT PRIMARY KEY, amount NUMERIC(12,2) NOT NULL CHECK(amount>=0)
  );
  ALTER TABLE sales_targets ADD COLUMN IF NOT EXISTS units INTEGER NOT NULL DEFAULT 0 CHECK(units>=0);
+ CREATE TABLE IF NOT EXISTS cash_movements(
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, date DATE NOT NULL,
+  direction TEXT NOT NULL CHECK(direction IN ('in','out')),
+  description TEXT NOT NULL, amount NUMERIC(12,2) NOT NULL CHECK(amount>0)
+ );
  CREATE TABLE IF NOT EXISTS product_targets(
   product_id INTEGER NOT NULL REFERENCES products(id),period TEXT NOT NULL,
   units INTEGER NOT NULL CHECK(units>0),PRIMARY KEY(product_id,period)

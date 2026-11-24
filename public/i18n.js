@@ -1,5 +1,41 @@
 const translations = new Map(`
 Overview|نظرة عامة
+Cash flow|السيولة النقدية
+Cash|السيولة النقدية
+This month at a glance|ملخص الشهر
+Cash movement for the month|صافي حركة السيولة خلال الشهر
+Needs attention|محتاج متابعة
+Conversations waiting for a reply|محادثات مستنية رد
+Monthly revenue still needed|الإيراد المتبقي على هدف الشهر
+Track money received and paid and compare it with profit.|تابعي المبالغ المقبوضة والمدفوعة وقارنيها بالربح.
+Opening cash balance|رصيد أول الفترة
+Cash received|المبالغ المقبوضة
+Cash paid|المبالغ المدفوعة
+Closing cash balance|رصيد آخر الفترة
+Record other cash movements|تسجيل حركة نقدية أخرى
+Paid sales and recorded expenses appear automatically. Use this form for an opening balance, owner deposits or withdrawals.|المبيعات المدفوعة والمصروفات المسجّلة بتظهر تلقائيًا. استخدمي النموذج للرصيد الافتتاحي أو إيداع أو سحب المالك.
+Cash direction|اتجاه الحركة النقدية
+Cash in|داخل
+Cash out|خارج
+Description|الوصف
+Record cash movement|تسجيل الحركة النقدية
+Cash movement register|سجل الحركات النقدية
+Expenses are treated as paid on their recorded date. Inventory adjustments and tax reserves are excluded until a payment is recorded.|المصروفات بتتحسب مدفوعة بتاريخ تسجيلها. حركة المخزون واحتياطي الضريبة يدخلوا في السيولة عند تسجيل دفع فعلي.
+Source|المصدر
+Other cash movement|حركة نقدية أخرى
+No cash movements for this period.|مفيش حركات نقدية في الفترة دي.
+Cash movement saved|تم حفظ الحركة النقدية
+Cash movement deleted|تم حذف الحركة النقدية
+Delete this cash movement?|تحبي تحذفي الحركة النقدية؟
+Enter a valid cash movement.|دخّلي بيانات حركة نقدية صحيحة.
+Desired stock|الرصيد المطلوب
+Used to suggest restock quantities.|الرقم ده بيستخدم لحساب كمية التوريد المقترحة.
+Restock plan|قائمة التوريد
+Set a desired stock level when editing each product. Suggested quantities are the desired level minus available units.|حددي الرصيد المطلوب عند تعديل كل منتج. التوريد المقترح هو الفرق بين الرصيد المطلوب والمتاح.
+Suggested units to order|القطع المقترح توريدها
+Record delivery|تسجيل استلام توريد
+No products are below their desired stock level.|مفيش منتجات أقل من رصيدها المطلوب.
+Enter a whole-number desired stock level.|دخّلي الرصيد المطلوب كعدد قطع صحيح.
 Dashboard|لوحة التحكم
 Store operations|إدارة النشاط
 Customer channels|العملاء والقنوات

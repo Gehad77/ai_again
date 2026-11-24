@@ -329,3 +329,38 @@ export function priceScenario({unitCost,extraCost,margin,fixedCosts,sellingPrice
     unitsToCoverCosts:contribution>0?Math.ceil(cents(fixedCosts)/contribution):null
   };
 }
+
+
+export const restockQuantity=product=>Math.max(0,(product.desired_stock??product.stock)-product.stock);
+
+export function cashFlow(data,period){
+  const timeZone=data.settings?.time_zone;
+  const [year,part]=period.split('-');
+  const startMonth=part?.startsWith('Q')?(Number(part.slice(1))-1)*3+1:Number(part??1);
+  const start=`${year}-${String(startMonth).padStart(2,'0')}-01`;
+  const entries=[];
+  for(const order of data.orders??[]){
+    if(order.status==='Paid')entries.push({date:businessDate(order.paid_at??order.date,timeZone),
+     type:'sale',id:order.id,value:order.quantity*cents(order.unit_price)});
+  }
+  for(const expense of data.expenses??[]){
+    entries.push({date:expense.date,type:'expense',id:expense.id,description:expense.description,value:-cents(expense.amount)});
+  }
+  for(const movement of data.cashMovements??[]){
+    entries.push({date:movement.date,type:'manual',id:movement.id,description:movement.description,
+     value:cents(movement.amount)*(movement.direction==='in'?1:-1)});
+  }
+  let opening=0,received=0,spent=0;
+  const rows=[];
+  for(const entry of entries){
+    if(entry.date<start)opening+=entry.value;
+    else if(isInPeriod(entry.date,period)){
+      if(entry.value>0)received+=entry.value;
+      else spent-=entry.value;
+      rows.push({...entry,amount:entry.value/100});
+    }
+  }
+  rows.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  return {opening:opening/100,received:received/100,spent:spent/100,
+    net:(received-spent)/100,closing:(opening+received-spent)/100,rows};
+}

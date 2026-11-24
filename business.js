@@ -1,5 +1,5 @@
 import { pool } from './db.js';
-import { validStockCount, isMoney, expenseEntry, isTargetPeriod, stockChange } from './public/business-model.js';
+import { validStockCount, isMoney, isDate, expenseEntry, isTargetPeriod, stockChange } from './public/business-model.js';
 
 export async function recordSale(client, order, product) {
   const remaining = product.stock - order.quantity;
@@ -22,25 +22,29 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
       invalid('Enter a valid name, category, price and unit cost.');
     }
     const threshold=p.stock_alert_threshold;
+    const desired=p.desired_stock;
+    if(desired!=null&&!validStockCount(desired))invalid('Enter a whole-number desired stock level.');
+
     if(threshold!=null&&!validStockCount(threshold))invalid('Enter a whole-number stock alert threshold.');
     const fields = [p.name.trim(), p.category.trim(), p.price, p.unit_cost ?? null];
     if (product) {
       const result = await pool.query(
         `UPDATE products SET name=$1,category=$2,price=$3,unit_cost=$4,
-          stock_alert_threshold=CASE WHEN $7 THEN $6 ELSE stock_alert_threshold END WHERE id=$5 RETURNING *`,
-        [...fields, product[1], threshold??null, threshold!==undefined]
+          stock_alert_threshold=CASE WHEN $7 THEN $6 ELSE stock_alert_threshold END,
+          desired_stock=CASE WHEN $9 THEN $8 ELSE desired_stock END WHERE id=$5 RETURNING *`,
+        [...fields, product[1], threshold??null, threshold!==undefined, desired??null, desired!==undefined]
       );
       return json(res, result.rowCount ? 200 : 404, result.rows[0] ?? {error:'Product not found.'});
     }
     if (!validStockCount(p.stock)) invalid('Enter valid opening stock.');
     const result = await pool.query(`
       WITH added AS (
-        INSERT INTO products(id,name,category,price,unit_cost,stock,emoji,color,stock_alert_threshold)
-        VALUES(nextval('product_ids'),$1,$2,$3,$4,$5,'◇','#e5eee6',$6) RETURNING *
+        INSERT INTO products(id,name,category,price,unit_cost,stock,emoji,color,stock_alert_threshold,desired_stock)
+        VALUES(nextval('product_ids'),$1,$2,$3,$4,$5,'◇','#e5eee6',$6,$7) RETURNING *
       ), movement AS (
         INSERT INTO stock_movements(product_id,delta,stock_after,kind,unit_cost)
         SELECT id,stock,stock,'opening',unit_cost FROM added WHERE stock>0
-      ) SELECT * FROM added`, [...fields, p.stock, threshold??null]);
+      ) SELECT * FROM added`, [...fields, p.stock, threshold??null, desired??null]);
     return json(res, 201, result.rows[0]);
   }
   if (product?.[2] && req.method === 'POST') {
@@ -91,6 +95,20 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
   if (expenseId !== null && req.method === 'DELETE') {
     const result = await pool.query('DELETE FROM operating_expenses WHERE id=$1', [expenseId]);
     return json(res, result.rowCount ? 200 : 404, result.rowCount ? {ok:true} : {error:'Expense not found.'});
+  }
+  if(route==='/api/cash-movements'&&req.method==='POST'){
+    const p=await body(req);
+    const description=typeof p?.description==='string'?p.description.trim():'';
+    if(!description||description.length>160||!isDate(p.date)||!isMoney(p.amount)||p.amount===0||
+       !['in','out'].includes(p.direction))invalid('Enter a valid cash movement.');
+    const {rows:[movement]}=await pool.query(`INSERT INTO cash_movements(date,direction,description,amount)
+      VALUES($1,$2,$3,$4) RETURNING id,date::text,direction,description,amount`,[p.date,p.direction,description,p.amount]);
+    return json(res,201,movement);
+  }
+  const cash=route.match(/^\/api\/cash-movements\/(\d{1,10})$/);
+  if(cash&&Number(cash[1])<=2147483647&&req.method==='DELETE'){
+    const result=await pool.query('DELETE FROM cash_movements WHERE id=$1',[cash[1]]);
+    return result.rowCount?json(res,200,{ok:true}):json(res,404,{error:'Cash movement not found.'});
   }
   if(route==='/api/product-targets'&&req.method==='PUT'){
     const p=await body(req);

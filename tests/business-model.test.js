@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, productTargetReport, salesPlan, priceScenario, pricingPlan, reportMargins, reviewExpenses } from '../public/business-model.js';
+import { cashFlow, defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, productTargetReport, salesPlan, priceScenario, pricingPlan, reportMargins, restockQuantity, reviewExpenses } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -168,4 +168,27 @@ test('expense filters reconcile spending and tax category aliases for legacy ent
  assert.equal(report.paidIncomeTax,15);
  assert.equal(report.overhead,125);
  assert.equal(report.recordedExpenses,165);
+});
+
+test('cash flow separates real spending from earnings and stock movements',()=>{
+ const data={
+  orders:[{id:1,date:'2026-10-30T10:00:00Z',paid_at:'2026-11-02T10:00:00Z',status:'Paid',unit_price:100,unit_cost:60,quantity:3},
+   {id:2,date:'2026-11-02T10:00:00Z',status:'Pending',unit_price:50,quantity:1}],
+  expenses:[{id:1,date:'2026-11-03',amount:40,included_in_product_cost:true},
+   {id:2,date:'2026-11-04',amount:15,category:'Income tax'}],
+  cashMovements:[{id:1,date:'2026-10-31',direction:'in',description:'Opening deposit',amount:200},
+   {id:2,date:'2026-11-04',direction:'out',description:'Owner withdrawal',amount:20}],
+  movements:[{kind:'writeoff',date:'2026-11-04T10:00:00Z',delta:-5,unit_cost:60}]
+ };
+ const {rows,...totals}=cashFlow(data,'2026-11');
+ assert.deepEqual(totals,{opening:200,received:300,spent:75,net:225,closing:425});
+ assert.equal(rows.length,4);
+ assert.equal(financials(data,'2026-11').net,-195);
+ assert.equal(cashFlow(data,'2026-Q4').opening,0);
+});
+
+test('desired stock produces a suggested delivery only for a positive gap',()=>{
+ assert.equal(restockQuantity({stock:6,desired_stock:20}),14);
+ assert.equal(restockQuantity({stock:22,desired_stock:20}),0);
+ assert.equal(restockQuantity({stock:6,desired_stock:null}),0);
 });

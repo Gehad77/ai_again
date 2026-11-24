@@ -1,6 +1,6 @@
 import {taxGuide} from './guide.js';
 import { currency, formatMoney, locale, translate } from './i18n.js';
-import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, expenseCategoryName, isLowStock, priceScenario, productResults, productTargetReport, quarterFor, reportMargins, salesPlan, stockAlertThreshold } from './business-model.js';
+import { businessDate, cashFlow, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, expenseCategoryName, isLowStock, priceScenario, productResults, productTargetReport, quarterFor, reportMargins, restockQuantity, salesPlan, stockAlertThreshold } from './business-model.js';
 
 const usd = formatMoney;
 const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
@@ -9,6 +9,8 @@ const amountField = 'type="number" min="0" max="9999999999.99" step="0.01"';
 const kinds = {opening:'Opening stock', sale:'Paid sale', restock:'Restock', correction:'Correction', writeoff:'Write-off'};
 const metric = (label, value, caption = '') => `
   <article class="metric"><div>${label}</div><strong>${value}</strong><small>${caption}</small></article>`;
+
+const mobileCell=(esc,label,value,attributes='')=>`<td role="cell" data-label="${esc(translate(label))}" ${attributes}><span>${value}</span></td>`;
 
 export function warehouseSummary(data, esc) {
   const stock = data.products.reduce((sum, product) => sum + product.stock, 0);
@@ -32,6 +34,65 @@ export function warehouseSummary(data, esc) {
       </tbody></table></div>
     </details>
   </section>`;
+}
+
+export function todayActions(data){
+  const month=businessDate(undefined,data.settings?.time_zone).slice(0,7);
+  const sales=financials(data,month);
+  const target=(data.targets??[]).find(row=>row.period===month);
+  const cash=cashFlow(data,month);
+  const attention=data.products.filter(product=>isLowStock(product,data.settings)).length;
+  const replies=data.conversations.filter(conversation=>conversation.status==='Needs reply').length;
+  const number=value=>value.toLocaleString(locale());
+  return `<section class="card recent business-card today-actions">
+   <div class="card-head"><div><h2>This month at a glance</h2><p><bdi>${month}</bdi></p></div>
+   <button type="button" data-go="cash">Cash flow</button></div>
+   <div class="metrics">${metric('Paid sales',usd(sales.revenue))}
+   ${metric('Net profit / loss',usd(sales.net))}
+   ${metric('Cash movement for the month',usd(cash.net))}</div>
+   <div class="card-head"><h2>Needs attention</h2></div>
+   <div class="attention-list">
+    <button type="button" data-go="warehouse" data-stock-attention data-jump="warehouse-stock"><span>Low-stock products</span><strong>${number(attention)}</strong></button>
+    <button type="button" data-go="inbox" data-open-needs-reply><span>Conversations waiting for a reply</span><strong>${number(replies)}</strong></button>
+    <button type="button" data-go="expenses" data-month-target data-jump="business-target"><span>Monthly revenue still needed</span>
+    <strong>${target?.amount>0?usd(Math.max(0,target.amount-sales.revenue)):'No sales target set'}</strong></button>
+   </div></section>`;
+}
+
+export function cashPage(data,esc,year,period){
+  const flow=cashFlow(data,period);
+  const date=businessDate(undefined,data.settings?.time_zone);
+  return `<div class="heading finance-heading"><div><h1>Cash flow</h1><p>Track money received and paid and compare it with profit.</p></div>${periodControls(year,period)}</div>
+   <div class="metrics">
+     ${metric('Opening cash balance',usd(flow.opening))}
+     ${metric('Cash received',usd(flow.received))}
+     ${metric('Cash paid',usd(flow.spent))}
+     ${metric('Closing cash balance',usd(flow.closing))}
+   </div>
+   <section class="card recent business-card">
+     <div class="card-head"><div><h2>Record other cash movements</h2>
+     <p>Paid sales and recorded expenses appear automatically. Use this form for an opening balance, owner deposits or withdrawals.</p></div></div>
+     <form id="cash-movement-form" class="business-form">
+       <label>Cash direction<select name="direction"><option value="in">Cash in</option><option value="out">Cash out</option></select></label>
+       <label>Description<input name="description" maxlength="160" required></label>
+       <label>Amount (${currency})<input name="amount" ${amountField.replace('min="0"','min="0.01"')} required></label>
+       <label>Date<input name="date" type="date" value="${date}" required></label>
+       <button type="submit" class="primary">Record cash movement</button><p class="form-error" role="alert"></p>
+     </form>
+   </section>
+   <section class="card recent business-card">
+     <div class="card-head"><div><h2>Cash movement register</h2>
+     <p>Expenses are treated as paid on their recorded date. Inventory adjustments and tax reserves are excluded until a payment is recorded.</p></div></div>
+     <div class="table-wrap warehouse-table"><table role="table"><thead role="rowgroup"><tr role="row"><th>Date</th><th>Source</th><th>Description</th><th>Amount</th><th>Actions</th></tr></thead><tbody role="rowgroup">
+     ${flow.rows.map(row=>`<tr role="row">
+      ${mobileCell(esc,'Date',row.date)}
+      ${mobileCell(esc,'Source',row.type==='sale'?'Paid sale':row.type==='expense'?'Expense':'Other cash movement')}
+      ${mobileCell(esc,'Description',row.description?esc(row.description):'Order #'+row.id,'data-user-content')}
+      ${mobileCell(esc,'Amount',usd(row.amount))}
+      ${mobileCell(esc,'Actions',row.type==='manual'?`<button type="button" data-delete-cash="${row.id}">Delete</button>`:'—')}
+     </tr>`).join('')||'<tr><td colspan="5">No cash movements for this period.</td></tr>'}
+      </tbody></table></div>
+   </section>`;
 }
 
 function starterTasks(data){
@@ -456,6 +517,7 @@ export function warehousePage(data,esc){
    ${metric('Units withdrawn',withdrawn.toLocaleString(locale()),'Current month')}
   </div>
   <div class="page-actions"><button type="button" data-section="warehouse-stock">Stock by product</button>
+  <button type="button" data-section="restock-plan">Restock plan</button>
   <button type="button" data-section="warehouse-movements">Stock movements</button></div>
   <section class="card recent business-card" id="warehouse-stock">
     <div class="card-head"><div><h2>Stock by product</h2></div>
@@ -479,6 +541,7 @@ export function warehousePage(data,esc){
     <tr id="warehouse-stock-empty" role="row" hidden><td colspan="6">No products match these filters.</td></tr>
     </tbody></table></div>
   </section>
+  ${restockPlan(data,esc)}
   <section class="card recent business-card" id="warehouse-movements">
     <div class="card-head"><div><h2>Stock movements</h2><p>Last 50 matching movements</p></div></div>
     <div class="business-form">
@@ -487,6 +550,21 @@ export function warehousePage(data,esc){
     </div>
     <div class="table-wrap"><table><thead><tr><th>Date</th><th>Product</th><th>Movement</th><th>Units</th><th>Stock after</th><th>Reference</th></tr></thead><tbody id="warehouse-movement-rows">${movementRows(data,esc)}</tbody></table></div>
   </section>`;
+}
+
+function restockPlan(data,esc){
+ const items=data.products.map(product=>({product,needed:restockQuantity(product)}))
+  .filter(item=>item.needed>0).sort((a,b)=>Number(isLowStock(b.product,data.settings))-Number(isLowStock(a.product,data.settings))||b.needed-a.needed);
+ return `<section class="card recent business-card" id="restock-plan">
+ <div class="card-head"><div><h2>Restock plan</h2><p>Set a desired stock level when editing each product. Suggested quantities are the desired level minus available units.</p></div></div>
+ <div class="table-wrap warehouse-table"><table role="table"><thead role="rowgroup"><tr role="row"><th>Product</th><th>Available units</th><th>Desired stock</th><th>Suggested units to order</th><th>Actions</th></tr></thead><tbody role="rowgroup">
+ ${items.map(({product,needed})=>`<tr role="row">
+ ${mobileCell(esc,'Product',`<span data-user-content>${esc(product.name)}</span>${isLowStock(product,data.settings)?'<small>Low stock</small>':''}`)}
+ ${mobileCell(esc,'Available units',product.stock)}${mobileCell(esc,'Desired stock',product.desired_stock)}
+ ${mobileCell(esc,'Suggested units to order',needed)}
+ ${mobileCell(esc,'Actions',`<button data-restock-product="${product.id}" data-restock-units="${needed}">Record delivery</button>`)}
+ </tr>`).join('')||'<tr><td colspan="5">No products are below their desired stock level.</td></tr>'}
+ </tbody></table></div></section>`;
 }
 
 function movementRows(data,esc,product='',kind=''){

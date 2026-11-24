@@ -1,11 +1,11 @@
 import { contextGuide, guidePage } from './guide.js';
 import { currency, formatMoney, language, localize, locale, setCurrency, setLanguage, translate } from './i18n.js';
 import { businessDate, currencies, defaultReportPeriod, expenseCategoryName, financeCsv, financials, isIncomeTaxCategory, isInPeriod, isLowStock, reviewExpenses, stockAlertThreshold, timeZones } from './business-model.js';
-import { bindPricingCalculator, bindSalesTargets, bindWarehouseFilters, businessProfile, expensePage, pricingPage, stockDialog, taxPage, warehousePage, warehouseSummary } from './business-view.js';
+import { bindPricingCalculator, bindSalesTargets, bindWarehouseFilters, businessProfile, cashPage, expensePage, pricingPage, stockDialog, taxPage, todayActions, warehousePage, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
 const staticSite=location.hostname.endsWith('github.io');
-const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',pricing:'≈',warehouse:'▧',analytics:'▥',integrations:'⌘',insights:'▥',taxes:'◇',guide:'?',settings:'⚙'};
-let state={page:location.hash==='#expenses'||location.hash==='#business-expense'?'expenses':['#settings','#taxes','#guide','#pricing','#warehouse'].includes(location.hash)?location.hash.slice(1):location.hash==='#business-warehouse'?'warehouse':['#profile','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
+const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',cash:'↔',pricing:'≈',warehouse:'▧',analytics:'▥',integrations:'⌘',insights:'▥',taxes:'◇',guide:'?',settings:'⚙'};
+let state={page:location.hash==='#expenses'||location.hash==='#business-expense'?'expenses':['#settings','#taxes','#guide','#pricing','#warehouse','#cash'].includes(location.hash)?location.hash.slice(1):location.hash==='#business-warehouse'?'warehouse':['#profile','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
 const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const api=async(url,options)=>{const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error);return d;};
 const toast=t=>{$('#toast').textContent=translate(t);$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),3000);};
@@ -14,7 +14,7 @@ const badge=s=>`<span class="badge ${s==='High intent'||s==='Converted'||s==='Pu
 const filtered=()=>state.data.conversations.filter(c=>(state.filter==='All channels'||c.channel===state.filter)&&`${c.name} ${c.product}`.toLowerCase().includes(state.search.toLowerCase()));
 function table(){return `<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Channel</th><th>Product interest</th><th>Buying signal</th><th>Status</th><th></th></tr></thead><tbody>${filtered().map(c=>`<tr data-chat="${c.id}" tabindex="0"><td><div class="person"><span class="avatar" style="background:${c.color}">${esc(c.initials)}</span><span><b data-user-content>${esc(c.name)}</b><small></small></span></div></td><td>${channel(c.channel)} ${c.channel}</td><td>${esc(c.product)}</td><td>${badge(c.intent)}</td><td><span class="dot ${c.status==='AI handling'?'purple':''}"></span>${c.status}</td><td>↗</td></tr>`).join('')||'<tr><td colspan="6">No conversations match your search.</td></tr>'}</tbody></table></div>`;}
 function filters(){return `<div class="filters"><div class="tabs">${['All channels','WhatsApp','Instagram','Messenger','Website'].map(x=>`<button class="${state.filter===x?'active':''}" data-filter="${x}">${x==='All channels'?'':channel(x)}${x}</button>`).join('')}</div><input id="search" placeholder="⌕ Search conversations" value="${esc(state.search)}" aria-label="Search conversations"></div>`;}
-function overview(){return `<div class="heading"><h1>Business overview</h1></div><div class="top-actions">${state.data.products.length?'<button class="primary" data-create="order">Record sale</button>':''}<button ${state.data.products.length?'':'class="primary"'} data-create="product">+ Add product</button><button data-go="expenses" data-jump="business-expense">Record expense</button><button data-go="inbox">View inbox ↗</button><button id="export">↗ Export report</button></div><div class="metrics">${[['Total conversations',String(state.data.conversations.length),'Social and account history','↗','mint'],['Interested customers',String(state.data.conversations.filter(c=>c.intent==='High intent').length),'Customers showing high buying intent','♧','lavender'],['Paid orders',String((state.data.orders||[]).filter(o=>o.status==='Paid').length),'Confirmed order records','▣','peach'],['Needs your attention',String(state.data.conversations.filter(c=>c.status==='Needs reply').length),'Conversations waiting for a reply','◷','yellow']].map(([label,n,sub,icon,color])=>`<article class="metric"><div>${label}<span class="metric-icon ${color}">${icon}</span></div><strong>${n}</strong><small>${sub}</small></article>`).join('')}</div>${warehouseSummary(state.data,esc)}<section class="card recent"><div class="card-head"><div><h2>Recent conversations</h2></div><button data-go="inbox">View inbox ↗</button></div>${filters()}${table()}</section>`;}
+function overview(){return `<div class="heading"><h1>Business overview</h1></div><div class="top-actions">${state.data.products.length?'<button class="primary" data-create="order">Record sale</button>':''}<button ${state.data.products.length?'':'class="primary"'} data-create="product">+ Add product</button><button data-go="expenses" data-jump="business-expense">Record expense</button><button data-go="inbox">View inbox ↗</button><button id="export">↗ Export report</button></div>${todayActions(state.data)}<div class="metrics">${[['Total conversations',String(state.data.conversations.length),'Social and account history','↗','mint'],['Interested customers',String(state.data.conversations.filter(c=>c.intent==='High intent').length),'Customers showing high buying intent','♧','lavender'],['Paid orders',String((state.data.orders||[]).filter(o=>o.status==='Paid').length),'Confirmed order records','▣','peach'],['Needs your attention',String(state.data.conversations.filter(c=>c.status==='Needs reply').length),'Conversations waiting for a reply','◷','yellow']].map(([label,n,sub,icon,color])=>`<article class="metric"><div>${label}<span class="metric-icon ${color}">${icon}</span></div><strong>${n}</strong><small>${sub}</small></article>`).join('')}</div>${warehouseSummary(state.data,esc)}<section class="card recent"><div class="card-head"><div><h2>Recent conversations</h2></div><button data-go="inbox">View inbox ↗</button></div>${filters()}${table()}</section>`;}
 function products(){return `<div class="heading"><div class="eyebrow">YOUR CATALOG</div><h1>Product catalog</h1><p></p></div><button class="primary create-action" data-create="product">+ Add product</button><div class="product-grid">${state.data.products.map(p=>`<article class="card product"><div class="product-art" style="background:${p.color}">${p.emoji}</div><small>${esc(p.category)}</small><h2>${esc(p.name)}</h2><div class="product-bottom"><strong>$${p.price.toFixed(2)}</strong>${badge(p.stock<10?'Low stock':p.stock+' in stock')}</div><p>${state.data.conversations.filter(c=>c.product===p.name).length} customer inquiries · ${(state.data.orders||[]).filter(o=>o.product_id===p.id&&o.status==='Paid').reduce((s,o)=>s+o.quantity,0)} units sold</p></article>`).join('')}</div>`;}
 function customers(){return `<div class="heading"><div class="eyebrow">PEOPLE, NOT JUST LEADS</div><h1>Meet your customers.</h1><p>Website customer accounts and conversation activity.</p></div><section class="card recent" id="customer-accounts"></section><section class="card">${filters()}${table()}</section>`;}
 const money=formatMoney;
@@ -163,13 +163,13 @@ async function refreshInbox(manual=false){
 }
 const navigationGroups = [
  ['Dashboard', ['overview']],
- ['Store operations', ['products','warehouse','pricing','profile','expenses','taxes','analytics']],
+ ['Store operations', ['products','warehouse','pricing','profile','expenses','cash','taxes','analytics']],
  ['Customer channels', ['inbox','customers','insights','integrations']],
  ['Workspace administration', ['settings','guide']]
 ];
 
 function navigation(){
- const labels={profile:'Business profile',integrations:'Social accounts',insights:'Customer insights',guide:'Business guide',pricing:'Product pricing'};
+ const labels={profile:'Business profile',integrations:'Social accounts',insights:'Customer insights',guide:'Business guide',pricing:'Product pricing',cash:'Cash flow'};
  return navigationGroups.map(([label,pages])=>`<section class="nav-group">
  ${pages[0]==='overview'?'':`<h2>${label}</h2>`}
  ${pages.map(page=>`<button type="button" data-go="${page}" class="nav-item ${state.page===page?'active':''}"
@@ -192,7 +192,7 @@ function render(){
  <div class="main">
   <header><div class="page-path"><span class="breadcrumb" data-user-content>${esc(state.data.workspace)}</span><span class="slash">/</span>${state.page[0].toUpperCase()+state.page.slice(1)}</div>
    <div class="header-right"><button id="signout">Sign out</button></div></header>
-  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='pricing'?pricingPage(state.data,esc):state.page==='warehouse'?warehousePage(state.data,esc):state.page==='taxes'?taxPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
+  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='cash'?cashPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='pricing'?pricingPage(state.data,esc):state.page==='warehouse'?warehousePage(state.data,esc):state.page==='taxes'?taxPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
  </div>`;
  if(state.page==='inbox')inbox().catch(e=>toast(e.message));
  else addContextGuide(state.page);
@@ -239,6 +239,7 @@ $('#workspace-sidebar').onkeydown=event=>{
 if(['profile','expenses'].includes(state.page))bindBusinessProfile();
 if(state.page==='pricing')bindPricingCalculator(state.data);
 if(state.page==='warehouse')bindWarehouseFilters(state.data,esc,state.warehouseFilters??={});
+if(state.page==='cash')bindCashFlow();
 if(state.page==='taxes'){
  bindReportControls();
  $('[data-download-finance]').onclick=()=>downloadFinanceReport();
@@ -304,7 +305,18 @@ document.addEventListener('click',e=>{const jump=e.target.closest('[data-section
 const edit=e.target.closest('[data-edit-product]');
 if(edit)openCreate('product',state.data.products.find(p=>p.id===Number(edit.dataset.editProduct)));
 const stock=e.target.closest('[data-stock-product]');
-if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide','warehouse','pricing'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory){
+if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));
+const restock=e.target.closest('[data-restock-product]');
+if(restock)openStock(state.data.products.find(p=>p.id===Number(restock.dataset.restockProduct)),Number(restock.dataset.restockUnits));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;
+if(go.hasAttribute('data-stock-attention'))state.warehouseFilters={...state.warehouseFilters,low:true,query:''};
+if(go.hasAttribute('data-open-needs-reply')){
+ state.inboxChannel='All channels';
+ state.selected=state.data.conversations.find(c=>c.status==='Needs reply')?.id;
+}
+if(go.hasAttribute('data-month-target')){
+ state.businessPeriod=businessDate(undefined,state.data.settings?.time_zone).slice(0,7);
+ state.businessYear=state.businessPeriod.slice(0,4);
+}history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide','warehouse','pricing','cash'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory){
  const category=$('#business-expense').elements.category;
  category.value=go.dataset.expenseCategory;
  category.dispatchEvent(new Event('input'));
@@ -428,8 +440,8 @@ function openCreate(kind, existing){
  const product=kind==='product';
  const field=(label,name,type='text',extra='')=>`<label>${label}<input name="${name}" type="${type}" ${extra} required></label>`;
  const dialog=document.createElement('dialog');dialog.className='entry-dialog';
- dialog.innerHTML=`<form><div class="dialog-heading"><h2>${product?(existing?'Edit product':'Add product'):'Create order'}</h2><button type="button" id="close-dialog" aria-label="Close">×</button></div><p>${product?'Grow your catalog with a new product.':'Paid orders reduce available stock and record sales revenue.'}</p><div class="form-grid">${product?field('Product name','name','text','maxlength="120"')+field('Category','category','text','maxlength="80"')+field('Selling price ('+currency+')','price','number','min="0" max="9999999999.99" step="0.01"')+`<label>Unit cost (${currency})<input name="unit_cost" type="number" min="0" max="9999999999.99" step="0.01"></label><label>Product stock alert threshold<input name="stock_alert_threshold" type="number" min="0" max="2147483647" step="1" placeholder="${stockAlertThreshold({},state.data.settings)}"><small>Leave blank to use the workspace threshold.</small></label>`+(existing?'':field('Stock quantity','stock','number','min="0" max="2147483647" step="1"')):`<label>Product<select name="product_id" required><option value="">Choose a product</option>${state.data.products.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock} in stock)</option>`).join('')}</select></label>`+field('Quantity','quantity','number','min="1" max="2147483647" step="1" value="1"')+field('Unit selling price ('+currency+')','unit_price','number','min="0" max="9999999999.99" step="0.01"')+field('Unit cost ('+currency+')','unit_cost','number','min="0" max="9999999999.99" step="0.01"')+`<label>Channel<select name="channel">${['WhatsApp','Instagram','Messenger','Website'].map(x=>`<option ${state.page==='inbox'&&state.data.conversations.find(c=>c.id===state.selected)?.channel===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Status<select name="status">${(state.page==='inbox'?['Paid','Pending','Cancelled','Refunded']:['Paid']).map(x=>`<option>${x}</option>`).join('')}</select></label>`}</div><p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" id="cancel-dialog">Cancel</button><button class="primary" ${!product&&!state.data.products.length?'disabled':''}>${product?'Save product':'Save order'}</button></div></form>`;
- if(existing)for(const name of ['name','category','price','unit_cost','stock_alert_threshold']){
+ dialog.innerHTML=`<form><div class="dialog-heading"><h2>${product?(existing?'Edit product':'Add product'):'Create order'}</h2><button type="button" id="close-dialog" aria-label="Close">×</button></div><p>${product?'Grow your catalog with a new product.':'Paid orders reduce available stock and record sales revenue.'}</p><div class="form-grid">${product?field('Product name','name','text','maxlength="120"')+field('Category','category','text','maxlength="80"')+field('Selling price ('+currency+')','price','number','min="0" max="9999999999.99" step="0.01"')+`<label>Unit cost (${currency})<input name="unit_cost" type="number" min="0" max="9999999999.99" step="0.01"></label><label>Product stock alert threshold<input name="stock_alert_threshold" type="number" min="0" max="2147483647" step="1" placeholder="${stockAlertThreshold({},state.data.settings)}"><small>Leave blank to use the workspace threshold.</small></label><label>Desired stock<input name="desired_stock" type="number" min="0" max="2147483647" step="1"><small>Used to suggest restock quantities.</small></label>`+(existing?'':field('Stock quantity','stock','number','min="0" max="2147483647" step="1"')):`<label>Product<select name="product_id" required><option value="">Choose a product</option>${state.data.products.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock} in stock)</option>`).join('')}</select></label>`+field('Quantity','quantity','number','min="1" max="2147483647" step="1" value="1"')+field('Unit selling price ('+currency+')','unit_price','number','min="0" max="9999999999.99" step="0.01"')+field('Unit cost ('+currency+')','unit_cost','number','min="0" max="9999999999.99" step="0.01"')+`<label>Channel<select name="channel">${['WhatsApp','Instagram','Messenger','Website'].map(x=>`<option ${state.page==='inbox'&&state.data.conversations.find(c=>c.id===state.selected)?.channel===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Status<select name="status">${(state.page==='inbox'?['Paid','Pending','Cancelled','Refunded']:['Paid']).map(x=>`<option>${x}</option>`).join('')}</select></label>`}</div><p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" id="cancel-dialog">Cancel</button><button class="primary" ${!product&&!state.data.products.length?'disabled':''}>${product?'Save product':'Save order'}</button></div></form>`;
+ if(existing)for(const name of ['name','category','price','unit_cost','stock_alert_threshold','desired_stock']){
   dialog.querySelector(`[name="${name}"]`).value=existing[name]??'';
  }
  if(!product)dialog.querySelector('[name="product_id"]').onchange=e=>{
@@ -438,7 +450,7 @@ function openCreate(kind, existing){
   dialog.querySelector('[name="unit_cost"]').value=selected?.unit_cost??'';
  };
  submitDialog(dialog, payload=>{
-  const numbers=product?['price','stock','unit_cost','stock_alert_threshold']:['product_id','quantity','unit_price','unit_cost'];
+  const numbers=product?['price','stock','unit_cost','stock_alert_threshold','desired_stock']:['product_id','quantity','unit_price','unit_cost'];
   for(const key of numbers)if(key in payload)payload[key]=payload[key]===''?null:Number(payload[key]);
   if(!product&&state.page==='inbox')payload.conversation_id=state.selected;
   return api(existing?`/api/products/${existing.id}`:product?'/api/products':'/api/orders',{
@@ -447,10 +459,11 @@ function openCreate(kind, existing){
  }, product?'Product saved':'Order created');
 }
 
-function openStock(product){
+function openStock(product, suggestedUnits){
  const dialog=document.createElement('dialog');
  dialog.className='entry-dialog';
  dialog.innerHTML=stockDialog(product,esc);
+ if(suggestedUnits)dialog.querySelector('[name="delta"]').value=suggestedUnits;
  submitDialog(dialog,payload=>api(`/api/products/${product.id}/stock`,{
   method:'POST',body:JSON.stringify({...payload,delta:Number(payload.delta)})
  }), 'Stock updated');
@@ -487,6 +500,35 @@ function bindReportControls(){
   render();
  };
  $('#business-period').onchange=e=>{state.businessPeriod=e.target.value;render();};
+}
+
+function bindCashFlow(){
+ bindReportControls();
+ const form=$('#cash-movement-form');
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  const button=form.querySelector('button');
+  button.disabled=true;
+  const entry=Object.fromEntries(new FormData(form));
+  entry.amount=Number(entry.amount);
+  try{
+   await api('/api/cash-movements',{method:'POST',body:JSON.stringify(entry)});
+   if(!isInPeriod(entry.date,state.businessPeriod)){
+    state.businessYear=entry.date.slice(0,4);
+    state.businessPeriod=entry.date.slice(0,7);
+   }
+  }catch(error){form.querySelector('[role=alert]').textContent=error.message;button.disabled=false;return;}
+  await refreshBusiness('Cash movement saved');
+ };
+ document.querySelectorAll('[data-delete-cash]').forEach(button=>{
+  button.onclick=async()=>{
+   if(!confirm(translate('Delete this cash movement?')))return;
+   button.disabled=true;
+   try{await api('/api/cash-movements/'+button.dataset.deleteCash,{method:'DELETE'});}
+   catch(error){toast(error.message);button.disabled=false;return;}
+   await refreshBusiness('Cash movement deleted');
+  };
+ });
 }
 
 function bindBusinessProfile(){

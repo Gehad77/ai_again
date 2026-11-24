@@ -301,6 +301,24 @@ test('a product can override the workspace stock alert and restore the default',
  assert.equal((await reset.json()).stock_alert_threshold,null);
 });
 
+test('stock replenishment level and manual cash movements persist with owner access',async()=>{
+ const send=(route,method,payload)=>fetch(base+route,{method,body:JSON.stringify(payload)});
+ const product={name:'Reorder test item',category:'Stock',price:20,unit_cost:8,stock:6,desired_stock:20};
+ assert.equal((await send('/api/products','POST',{...product,desired_stock:2.5})).status,400);
+ const created=await send('/api/products','POST',product);
+ assert.equal((await created.json()).desired_stock,20);
+ const manual={date:'2026-11-24',direction:'in',description:'Owner cash deposit',amount:40};
+ assert.equal((await rawFetch(base+'/api/cash-movements',{method:'POST',body:JSON.stringify(manual)})).status,401);
+ assert.equal((await send('/api/cash-movements','POST',{...manual,amount:0})).status,400);
+ const movement=await send('/api/cash-movements','POST',manual);
+ assert.equal(movement.status,201);
+ const {id}=await movement.json();
+ const data=await (await fetch(base+'/api/overview')).json();
+ assert.deepEqual(data.cashMovements.find(row=>row.id===id),{id,...manual});
+ assert.equal((await fetch(base+'/api/cash-movements/'+id,{method:'DELETE'})).status,200);
+ assert.equal((await (await fetch(base+'/api/overview')).json()).cashMovements.length,0);
+});
+
 test('registered customer accounts are visible only to the owner', async t => {
  process.env.ENABLE_LEGACY_SHOP='1';
  t.after(()=>{delete process.env.ENABLE_LEGACY_SHOP;});
