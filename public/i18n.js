@@ -293,6 +293,10 @@ Receiving messages|تم استقبال رسائل
 Waiting for first message|في انتظار أول رسالة
 Setup required|الربط مطلوب
 Webhook address|عنوان الـWebhook
+Copy address|نسخ العنوان
+Address copied|تم نسخ العنوان
+Address selected. Copy it to your clipboard.|تم تحديد العنوان. انسخيه للحافظة.
+Conversations|المحادثات
 Subscribe your WhatsApp Business, Instagram or Messenger account in the Meta app settings.|اربطي حساب واتساب بيزنس أو إنستجرام أو ماسنجر من إعدادات تطبيق Meta.
 Configure META_APP_SECRET and META_VERIFY_TOKEN on the hosting service to enable the webhook.|أضيفي META_APP_SECRET وMETA_VERIFY_TOKEN في الاستضافة لتفعيل استقبال الرسائل.
 WhatsApp|واتساب

@@ -105,3 +105,24 @@
  .metric { min-width:0; }
  .metric strong { overflow-wrap:anywhere; }
 }
+
+.webhook-address { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.webhook-address code { min-width:0; max-width:100%; overflow-wrap:anywhere; padding:10px 12px;
+ background:#f3f7f3; border:1px solid var(--border); border-radius:8px; }
+.webhook-address button { min-height:40px; }
+.threads { min-width:0; border-inline-end:1px solid var(--border); border-right:0; }
+[dir="ltr"] .threads { border-right:1px solid var(--border); }
+.threads h2 { margin:4px 6px 10px; font-size:13px; }
+.thread-list { display:grid; gap:4px; max-height:460px; overflow-y:auto; }
+.thread-list .thread { min-width:0; min-height:44px; text-align:start; align-items:center; border-radius:8px; }
+.thread-list .thread > span:last-child { min-width:0; overflow-wrap:anywhere; }
+.thread-list .thread:focus-visible { outline:2px solid #276447; outline-offset:-2px; }
+.thread-list .thread[aria-current="true"] { box-shadow:inset 0 0 0 1px #c8dfce; }
+.chat { min-width:0; }
+.chat-head .person { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:700px){
+ .inbox-layout .threads { display:block; border-inline-end:0; border-right:0; overflow:visible; }
+ .thread-list { grid-template-columns:repeat(2,minmax(0,1fr)); max-height:210px; }
+ .thread-list .thread { padding:8px; }
+ .chat-head { flex-wrap:wrap; }
+}
