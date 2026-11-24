@@ -1,11 +1,11 @@
 import { contextGuide, guidePage } from './guide.js';
 import { currency, formatMoney, language, localize, locale, setCurrency, setLanguage, translate } from './i18n.js';
 import { businessDate, currencies, defaultReportPeriod, financeCsv, isInPeriod, timeZones } from './business-model.js';
-import { bindPricingCalculator, bindSalesTargets, businessProfile, expensePage, stockDialog, taxPage, warehouseSummary } from './business-view.js';
+import { bindPricingCalculator, bindSalesTargets, bindWarehouseFilters, businessProfile, expensePage, pricingPage, stockDialog, taxPage, warehousePage, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
 const staticSite=location.hostname.endsWith('github.io');
-const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',analytics:'▥',integrations:'⌘',insights:'▥',taxes:'◇',guide:'?',settings:'⚙'};
-let state={page:location.hash==='#expenses'||location.hash==='#business-expense'?'expenses':['#settings','#taxes','#guide'].includes(location.hash)?location.hash.slice(1):['#profile','#business-warehouse','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
+const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',pricing:'≈',warehouse:'▧',analytics:'▥',integrations:'⌘',insights:'▥',taxes:'◇',guide:'?',settings:'⚙'};
+let state={page:location.hash==='#expenses'||location.hash==='#business-expense'?'expenses':['#settings','#taxes','#guide','#pricing','#warehouse'].includes(location.hash)?location.hash.slice(1):location.hash==='#business-warehouse'?'warehouse':['#profile','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
 const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const api=async(url,options)=>{const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error);return d;};
 const toast=t=>{$('#toast').textContent=translate(t);$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),3000);};
@@ -163,13 +163,13 @@ async function refreshInbox(manual=false){
 }
 const navigationGroups = [
  ['Dashboard', ['overview']],
- ['Store operations', ['products','profile','expenses','taxes','analytics']],
+ ['Store operations', ['products','warehouse','pricing','profile','expenses','taxes','analytics']],
  ['Customer channels', ['inbox','customers','insights','integrations']],
  ['Workspace administration', ['settings','guide']]
 ];
 
 function navigation(){
- const labels={profile:'Business profile',integrations:'Social accounts',insights:'Customer insights',guide:'Business guide'};
+ const labels={profile:'Business profile',integrations:'Social accounts',insights:'Customer insights',guide:'Business guide',pricing:'Product pricing'};
  return navigationGroups.map(([label,pages])=>`<section class="nav-group">
  ${pages[0]==='overview'?'':`<h2>${label}</h2>`}
  ${pages.map(page=>`<button type="button" data-go="${page}" class="nav-item ${state.page===page?'active':''}"
@@ -192,7 +192,7 @@ function render(){
  <div class="main">
   <header><div class="page-path"><span class="breadcrumb" data-user-content>${esc(state.data.workspace)}</span><span class="slash">/</span>${state.page[0].toUpperCase()+state.page.slice(1)}</div>
    <div class="header-right"><button id="signout">Sign out</button></div></header>
-  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='taxes'?taxPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
+  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='pricing'?pricingPage(state.data,esc):state.page==='warehouse'?warehousePage(state.data,esc):state.page==='taxes'?taxPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
  </div>`;
  if(state.page==='inbox')inbox().catch(e=>toast(e.message));
  else addContextGuide(state.page);
@@ -237,6 +237,8 @@ $('#workspace-sidebar').onkeydown=event=>{
  }
 };
 if(['profile','expenses'].includes(state.page))bindBusinessProfile();
+if(state.page==='pricing')bindPricingCalculator(state.data);
+if(state.page==='warehouse')bindWarehouseFilters(state.data,esc);
 if(state.page==='taxes'){
  bindReportControls();
  $('[data-download-finance]').onclick=()=>downloadFinanceReport();
@@ -302,7 +304,7 @@ document.addEventListener('click',e=>{const jump=e.target.closest('[data-section
 const edit=e.target.closest('[data-edit-product]');
 if(edit)openCreate('product',state.data.products.find(p=>p.id===Number(edit.dataset.editProduct)));
 const stock=e.target.closest('[data-stock-product]');
-if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory)$('#business-expense').elements.category.value=go.dataset.expenseCategory;if(go.dataset.jump)jumpToSection(go.dataset.jump);else focusPage();}if(chat){if(!chat.matches('.thread'))state.inboxChannel='All channels';state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);state.focusThread=chat.matches('.thread')?state.selected:null;render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
+if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide','warehouse','pricing'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory)$('#business-expense').elements.category.value=go.dataset.expenseCategory;if(go.dataset.jump)jumpToSection(go.dataset.jump);else focusPage();}if(chat){if(!chat.matches('.thread'))state.inboxChannel='All channels';state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);state.focusThread=chat.matches('.thread')?state.selected:null;render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('tr[data-chat]'))e.target.click();});
 
 async function loadCustomerAccounts(){
@@ -484,7 +486,6 @@ function bindReportControls(){
 }
 
 function bindBusinessProfile(){
- if(state.page==='profile')bindPricingCalculator(state.data);
  bindSalesTargets(state.data,state.estimateProduct,id=>{state.estimateProduct=id;});
  bindReportControls();
  const target=$('#business-target');

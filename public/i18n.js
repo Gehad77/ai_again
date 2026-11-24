@@ -288,6 +288,32 @@ Choose or type a category|اختاري أو اكتبي تصنيفًا
 e.g. Cotton for T-shirts|مثلًا قماش قطني للتيشيرتات
 No recorded expenses this period.|مفيش مصروفات مسجّلة في الفترة دي.
 Pricing calculator|حاسبة التسعير
+Pricing|التسعير
+Product pricing|تسعير المنتجات
+Compare estimates before setting a price in your catalog.|قارني التقديرات قبل ما تحددي السعر في الكتالوج.
+Proposed selling price|سعر البيع اللي عايزة تجربيه
+Leave blank to use the suggested price|سيبيها فاضية لاستخدام السعر المقترح
+Expected units sold|عدد القطع المتوقع بيعها
+Estimates only. Prices, orders and financial reports are not updated.|الأرقام تقديرية. تجربة السعر هنا ما بتغيّرش أسعار المنتجات أو الطلبات أو التقارير.
+Enter a selling price greater than zero or a positive cost to calculate a suggested price.|دخّلي سعر بيع أكبر من صفر أو تكلفة موجبة عشان نحسب سعر مقترح.
+Total cost per unit|إجمالي تكلفة القطعة
+Based on the target margin|حسب هامش الربح المستهدف
+Selling price used|سعر البيع المستخدم في الحساب
+Expected result per unit|الربح أو الخسارة المتوقعة للقطعة
+Before fixed expenses and tax|قبل المصاريف الثابتة والضريبة
+Margin at this price|هامش الربح بالسعر ده
+Expected profit or loss|إجمالي الربح أو الخسارة المتوقعة
+For the expected units, after fixed expenses and before tax|للعدد المتوقع، بعد المصاريف الثابتة وقبل الضريبة
+Open warehouse ↗|افتحي المخزن ↗
+Check stock, add or remove units, and review movement history.|راجعي المخزون وسجّلي الزيادة أو السحب وتابعي سجل الحركة.
+Stock value at cost|قيمة المخزون بالتكلفة
+Includes products with a saved unit cost|تشمل المنتجات اللي ليها تكلفة وحدة مسجّلة
+Stock by product|المخزون لكل منتج
+Current month|الشهر الحالي
+All products|كل المنتجات
+All movements|كل الحركات
+Last 50 matching movements|آخر ٥٠ حركة مطابقة للفلاتر
+No stock movements match these filters.|مفيش حركات مخزون مطابقة للفلاتر.
 Manual estimate|تقدير يدوي
 Product cost per unit|تكلفة المنتج للقطعة
 Other cost per unit|تكلفة إضافية للقطعة

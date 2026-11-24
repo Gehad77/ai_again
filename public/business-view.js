@@ -1,6 +1,6 @@
 import {taxGuide} from './guide.js';
 import { currency, formatMoney, locale, translate } from './i18n.js';
-import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, pricingPlan, productResults, productTargetReport, quarterFor, reportMargins, salesPlan } from './business-model.js';
+import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, priceScenario, productResults, productTargetReport, quarterFor, reportMargins, salesPlan } from './business-model.js';
 
 const usd = formatMoney;
 const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
@@ -19,7 +19,7 @@ export function warehouseSummary(data, esc) {
     .reduce((sum, movement) => sum - movement.delta, 0);
   return `<section class="recent">
     <div class="card-head"><div><h2>Warehouse & sales</h2><p>Current stock and activity this month</p></div>
-    <button data-go="profile">Manage business ↗</button></div>
+    <button data-go="warehouse">Open warehouse ↗</button></div>
     <div class="metrics">
       ${metric('Units in stock', stock)}
       ${metric('Units withdrawn', withdrawn, 'Recorded warehouse movements')}
@@ -38,9 +38,9 @@ function starterTasks(data){
   const hasCost = data.products.some(p => p.unit_cost != null);
   const hasProduct = data.products.length > 0;
   const steps = [
-    [hasProduct, 'Add your first product', '#business-warehouse'],
-    [hasCost, 'Set a unit cost for at least one product', '#business-warehouse'],
-    [data.orders.some(o => o.status === 'Paid'), 'Record your first paid sale', '#business-warehouse'],
+    [hasProduct, 'Add your first product', '#warehouse'],
+    [hasCost, 'Set a unit cost for at least one product', '#warehouse'],
+    [data.orders.some(o => o.status === 'Paid'), 'Record your first paid sale', '#warehouse'],
     [(data.expenses ?? []).length > 0, 'Record an operating expense', '#expenses'],
     [(data.targets ?? []).some(t => t.amount > 0 || t.units > 0), 'Set a monthly or quarterly sales target', '#business-target']
   ];
@@ -48,21 +48,24 @@ function starterTasks(data){
   return `<section class="card recent business-card"><div class="card-head"><div>
     <h2>Set up your business</h2><p>${steps.filter(([done]) => done).length} of ${steps.length} steps completed</p></div></div>
     <ul class="starter-steps">${steps.map(([done,label,anchor])=>
-      `<li>${done?'✓':'○'} <a href="${anchor}" ${anchor==='#expenses'?'data-go="expenses"':''}>${label}</a>${done?' <small>Complete</small>':''}</li>`
+      `<li>${done?'✓':'○'} <a href="${anchor}" ${['#expenses','#warehouse'].includes(anchor)?`data-go="${anchor.slice(1)}"`:''}>${label}</a>${done?' <small>Complete</small>':''}</li>`
     ).join('')}</ul></section>`;
 }
 
-function pricingCalculator(products, esc){
-  return `<section class="card recent business-card"><div class="card-head"><div>
+export function pricingPage(data, esc){
+  return `<div class="heading"><h1>Product pricing</h1><p>Compare estimates before setting a price in your catalog.</p></div><section class="card recent business-card"><div class="card-head"><div>
     <h2>Pricing calculator</h2><p>Estimate a selling price and how many units would cover your planned expenses.</p></div></div>
     <form id="pricing-calculator" class="business-form">
       <label>Product <select name="product"><option value="">Manual estimate</option>
-        ${products.map(p => `<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+        ${data.products.map(p => `<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
       <label>Product cost per unit (${currency})<input name="cost" ${amountField} required></label>
       <label>Other cost per unit (${currency})<input name="extra" ${amountField} value="0" required></label>
       <label>Target margin (%)<input name="margin" type="number" step="0.01" min="0.01" max="99.99" value="30" required></label>
       <label>Planned fixed expenses (${currency})<input name="fixed" ${amountField} value="0" required></label>
+      <label>Proposed selling price (${currency})<input name="selling_price" ${amountField} placeholder="Leave blank to use the suggested price"></label>
+      <label>Expected units sold<input name="units" type="number" min="1" max="1000000" step="1" value="1" required></label>
       <button class="primary">Calculate</button>
+      <small>Estimates only. Prices, orders and financial reports are not updated.</small>
       <p class="form-error" role="alert"></p>
     </form>
     <div id="pricing-result" class="metrics" role="status"></div>
@@ -80,20 +83,29 @@ export function bindPricingCalculator(data){
   form.elements.product.onchange = () => {
     const product = data.products.find(p => p.id === Number(form.elements.product.value));
     form.elements.cost.value = product?.unit_cost ?? '';
+    form.elements.selling_price.value = product?.price>0?product.price:'';
     clear();
   };
   form.onsubmit = event => {
     event.preventDefault();
     clear();
-    const {cost,extra,margin,fixed} = Object.fromEntries(new FormData(form));
-    const plan = pricingPlan(Number(cost),Number(extra),Number(margin),Number(fixed));
+    const {cost,extra,margin,fixed,selling_price,units} = Object.fromEntries(new FormData(form));
+    const plan=priceScenario({unitCost:Number(cost),extraCost:Number(extra),margin:Number(margin),fixedCosts:Number(fixed),
+      sellingPrice:selling_price===''?null:Number(selling_price),units:Number(units)});
     if(!plan){
-      form.querySelector('.form-error').textContent = 'Enter a positive total unit cost and a margin between 0.01% and 99.99%.';
+      form.querySelector('.form-error').textContent = 'Enter a selling price greater than zero or a positive cost to calculate a suggested price.';
       return;
     }
-    result.innerHTML = metric('Suggested selling price',usd(plan.price),'Rounded up to the nearest cent')+
-      metric('Amount left per unit',usd(plan.contribution),'After the unit costs entered above')+
-      metric('Units to cover fixed expenses',plan.unitsToCoverCosts.toLocaleString(), 'At the suggested selling price');
+    result.innerHTML=[
+      metric('Total cost per unit',usd(plan.unitCost)),
+      metric('Suggested selling price',plan.suggestedPrice===null?'—':usd(plan.suggestedPrice),'Based on the target margin'),
+      metric('Selling price used',usd(plan.price)),
+      metric('Expected result per unit',usd(plan.unitProfit),'Before fixed expenses and tax'),
+      metric('Margin at this price',marginLabel(plan.margin)),
+      metric('Expected profit or loss',usd(plan.totalProfit),'For the expected units, after fixed expenses and before tax'),
+      metric('Units to cover fixed expenses',plan.unitsToCoverCosts===null?'—':plan.unitsToCoverCosts.toLocaleString(locale()))
+    ].join('');
+
   };
 }
 
@@ -327,22 +339,11 @@ function productProfit(data,esc,period){
 export function businessProfile(data, esc, year, period) {
   const report = financials(data, period);
   const margins = reportMargins(report);
-  const costValue = data.products.reduce((sum, p) => sum + p.stock * (p.unit_cost ?? 0), 0);
-  const unknown = data.products.filter(p => p.stock && p.unit_cost == null).length;
-  const productName = id => esc(data.products.find(p => p.id === id)?.name ?? 'Unknown product');
   return `
   <div class="heading"><h1>Business profile</h1><p>Manage products, warehouse movements, expenses and sales targets.</p></div>
   ${starterTasks(data)}
-  <section class="card recent business-card" id="business-warehouse">
-    <div class="card-head"><div><h2>Warehouse</h2><p>Recorded stock cost ${usd(costValue)}${unknown ? ` · ${unknown} stocked products need a unit cost` : ''}</p></div>
-    <div><button data-create="order">Record sale</button> <button class="primary" data-create="product">Add product</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Selling price</th><th>Unit cost</th><th>Actions</th></tr></thead><tbody>
-    ${data.products.map(p => `<tr><td><b data-user-content>${esc(p.name)}</b><small>${esc(p.category)}</small></td>
-      <td>${p.stock}${p.stock <= (data.settings?.low_stock_threshold ?? 10) ? ' <span class="badge amber">Low stock</span>' : ''}</td>
-      <td>${usd(p.price)}</td><td>${p.unit_cost == null ? 'Unset' : usd(p.unit_cost)}</td>
-      <td><button data-edit-product="${p.id}">Edit product</button> <button data-stock-product="${p.id}">Adjust stock</button></td></tr>`).join('') || '<tr><td colspan="5">Add your first product to start tracking stock.</td></tr>'}
-    </tbody></table></div>
-  </section>
+  <div class="page-actions"><button type="button" data-go="warehouse">Open warehouse ↗</button>
+  <button type="button" data-go="pricing">Product pricing</button></div>
   <section class="card recent business-card">
     <div class="card-head"><div><h2>Profit & loss</h2><p>Based on paid sales, recorded expenses and inventory write-offs. ${currency} · ${esc(data.settings?.time_zone??'Africa/Cairo')}.</p></div>
     <div class="report-toolbar">${periodControls(year,period)}<button type="button" data-download-finance>Download period report</button></div></div>
@@ -362,18 +363,69 @@ export function businessProfile(data, esc, year, period) {
     </div>
   </section>
 
-${pricingCalculator(data.products,esc)}
+
   ${salesTargets(data,esc,year,period)}
   ${productGoals(data,esc,year,period)}
   ${productProfit(data,esc,period)}
-  <section class="card recent business-card">
-    <div class="card-head"><div><h2>Stock movements</h2><p>Last 50 recorded movements</p></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Product</th><th>Movement</th><th>Units</th><th>Stock after</th><th>Reference</th></tr></thead><tbody>
-    ${(data.movements ?? []).slice(0, 50).map(m => `<tr><td>${businessDate(m.date,data.settings?.time_zone)}</td><td>${productName(m.product_id)}</td>
-      <td>${kinds[m.kind]}</td><td>${m.delta > 0 ? '+' : ''}${m.delta}</td><td>${m.stock_after}</td>
-      <td>${m.order_id ? `Order #${m.order_id}` : esc(m.note || '')}</td></tr>`).join('') || '<tr><td colspan="6">New stock movements will appear here.</td></tr>'}
+  `;
+}
+
+export function warehousePage(data,esc){
+  const costValue = data.products.reduce((sum, p) => sum + p.stock * (p.unit_cost ?? 0), 0);
+  const unknown = data.products.filter(p => p.stock && p.unit_cost == null).length;
+  const units=data.products.reduce((sum,p)=>sum+p.stock,0);
+  const threshold=data.settings?.low_stock_threshold??10;
+  const month=businessDate(undefined,data.settings?.time_zone).slice(0,7);
+  const moves=data.movements??[];
+  const withdrawn=moves.reduce((sum,move)=>move.delta<0&&businessDate(move.date,data.settings?.time_zone).startsWith(month)?sum-move.delta:sum,0);
+  return `<div class="heading"><h1>Warehouse</h1><p>Check stock, add or remove units, and review movement history.</p></div>
+  <div class="metrics">
+   ${metric('Units in stock',units.toLocaleString(locale()))}
+   ${metric('Stock value at cost',usd(costValue),unknown?'Includes products with a saved unit cost':'')}
+   ${metric('Low-stock products',data.products.filter(p=>p.stock<=threshold).length)}
+   ${metric('Units withdrawn',withdrawn.toLocaleString(locale()),'Current month')}
+  </div>
+  <div class="page-actions"><button type="button" data-section="warehouse-stock">Stock by product</button>
+  <button type="button" data-section="warehouse-movements">Stock movements</button></div>
+  <section class="card recent business-card" id="warehouse-stock">
+    <div class="card-head"><div><h2>Stock by product</h2></div>
+    <div>${data.products.length?'<button data-create="order">Record sale</button>':''} <button class="primary" data-create="product">Add product</button></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Selling price</th><th>Unit cost</th><th>Actions</th></tr></thead><tbody>
+    ${data.products.map(p => `<tr><td><b data-user-content>${esc(p.name)}</b><small>${esc(p.category)}</small></td>
+      <td>${p.stock}${p.stock <= (data.settings?.low_stock_threshold ?? 10) ? ' <span class="badge amber">Low stock</span>' : ''}</td>
+      <td>${usd(p.price)}</td><td>${p.unit_cost == null ? 'Unset' : usd(p.unit_cost)}</td>
+      <td><button data-edit-product="${p.id}">Edit product</button> <button data-stock-product="${p.id}">Adjust stock</button></td></tr>`).join('') || '<tr><td colspan="5">Add your first product to start tracking stock.</td></tr>'}
     </tbody></table></div>
+  </section>
+  <section class="card recent business-card" id="warehouse-movements">
+    <div class="card-head"><div><h2>Stock movements</h2><p>Last 50 matching movements</p></div></div>
+    <div class="business-form">
+      <label>Product<select id="warehouse-product"><option value="">All products</option>${data.products.map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      <label>Movement<select id="warehouse-kind"><option value="">All movements</option>${Object.entries(kinds).map(([key,label])=>`<option value="${key}">${label}</option>`).join('')}</select></label>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Product</th><th>Movement</th><th>Units</th><th>Stock after</th><th>Reference</th></tr></thead><tbody id="warehouse-movement-rows">${movementRows(data,esc)}</tbody></table></div>
   </section>`;
+}
+
+function movementRows(data,esc,product='',kind=''){
+ const names=new Map(data.products.map(p=>[p.id,p.name]));
+ return (data.movements??[]).filter(move=>
+  (!product||move.product_id===Number(product))&&(!kind||move.kind===kind)
+ ).slice(0,50).map(move=>`<tr><td>${businessDate(move.date,data.settings?.time_zone)}</td>
+  <td data-user-content>${esc(names.get(move.product_id)??'Unknown product')}</td>
+  <td>${kinds[move.kind]}</td><td>${move.delta>0?'+':''}${move.delta}</td><td>${move.stock_after}</td>
+  <td>${move.order_id?`Order #${move.order_id}`:esc(move.note||'')}</td></tr>`).join('')||
+  '<tr><td colspan="6">No stock movements match these filters.</td></tr>';
+}
+
+export function bindWarehouseFilters(data,esc){
+ const product=document.querySelector('#warehouse-product');
+ const kind=document.querySelector('#warehouse-kind');
+ const update=()=>{
+  document.querySelector('#warehouse-movement-rows').innerHTML=movementRows(data,esc,product.value,kind.value);
+ };
+ product.onchange=update;
+ kind.onchange=update;
 }
 
 export function stockDialog(product, esc) {

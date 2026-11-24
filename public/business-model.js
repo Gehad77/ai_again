@@ -278,3 +278,23 @@ export function productTargetReport(data,period){
     totalSold:products.reduce((sum,p)=>sum+p.units,0)
   };
 }
+
+export function priceScenario({unitCost,extraCost,margin,fixedCosts,sellingPrice,units}){
+  if(![unitCost,extraCost,fixedCosts].every(isMoney)||
+     (sellingPrice!==null&&(!isMoney(sellingPrice)||sellingPrice===0))||
+     !Number.isInteger(units)||units<1||units>1000000)return null;
+  const suggested=pricingPlan(unitCost,extraCost,margin,fixedCosts);
+  const price=sellingPrice??suggested?.price;
+  if(!price)return null;
+  const cost=cents(unitCost)+cents(extraCost);
+  const contribution=cents(price)-cost;
+  const total=contribution*units-cents(fixedCosts);
+  if(!Number.isSafeInteger(total))return null;
+  return {
+    suggestedPrice:suggested?.price??null,
+    price, unitCost:cost/100, unitProfit:contribution/100,
+    margin:contribution/cents(price),
+    totalProfit:total/100,
+    unitsToCoverCosts:contribution>0?Math.ceil(cents(fixedCosts)/contribution):null
+  };
+}

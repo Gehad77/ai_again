@@ -9,9 +9,17 @@ const sections={
   ['Products','المنتجات'],
   ['Set a selling price, unit cost and stock for each product. Include the materials and labour that go into one unit when you calculate its cost. Accurate costs let you compare what each product earns.','لكل منتج سجّلي سعر البيع وتكلفة القطعة والمخزون. احسبي الخامات والتصنيع اللي بتحتاجهم القطعة الواحدة ضمن تكلفتها. التكلفة الدقيقة بتساعدك تعرفي أي منتج بيكسب أكتر.']
  ],
+ pricing:[
+  ['Product pricing','تسعير المنتجات'],
+  ['Try a selling price or use the suggested price based on your costs and target margin. Enter expected units and fixed expenses to estimate the result before tax. This calculator never changes saved prices or reports.','جرّبي سعر بيع من عندك أو استخدمي السعر المقترح من التكلفة والهامش. دخّلي عدد القطع المتوقع والمصاريف الثابتة عشان تشوفي النتيجة قبل الضريبة. الحاسبة ما بتغيّرش الأسعار المحفوظة أو التقارير.']
+ ],
+ warehouse:[
+  ['Warehouse','المخزن'],
+  ['Review available stock and its cost, record restocks or write-offs, and filter movement history by product and movement type. Paid sales automatically reduce available stock.','راجعي الرصيد وتكلفته، وسجّلي التوريد أو التالف، وفلترّي سجل الحركات حسب المنتج ونوع الحركة. البيع المدفوع بيخصم تلقائيًا من الرصيد.']
+ ],
  profile:[
   ['Business profile','ملف النشاط'],
-  ['Use the warehouse to record stock movements and check the profit and loss report. Paid orders reduce stock. Write-offs reduce stock and count as a loss at the saved unit cost.','من المخزون سجّلي الحركات وراجعي تقرير الأرباح والخسائر. الطلب المدفوع بيخصم من المخزون. التالف بيقلّل المخزون وبيتسجّل كخسارة بتكلفة الوحدة المحفوظة.']
+  ['Check the profit and loss report here. Open Warehouse to record stock movements. Paid orders reduce stock. Write-offs reduce stock and count as a loss at the saved unit cost.','راجعي تقرير الأرباح والخسائر هنا. لتسجيل الحركات افتحي قسم المخزن. الطلب المدفوع بيخصم من المخزون. التالف بيقلّل المخزون وبيتسجّل كخسارة بتكلفة الوحدة المحفوظة.']
  ],
  expenses:[
   ['Expenses and targets','المصروفات والأهداف'],

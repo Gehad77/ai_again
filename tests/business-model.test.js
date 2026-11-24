@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, productTargetReport, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
+import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, productTargetReport, salesPlan, priceScenario, pricingPlan, reportMargins } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -134,4 +134,15 @@ test('quarterly product goals use explicit overrides and preserve each remaining
  assert.equal(report.products[1].fromMonths,true);
  assert.equal(report.products[0].target,50);
  assert.equal(productTargetReport(data,'2026-11').products[0].remaining,25);
+});
+
+test('independent pricing scenarios estimate profit at a manual or suggested price',()=>{
+ const inputs={unitCost:80,extraCost:20,margin:20,fixedCosts:100,units:10};
+ assert.deepEqual(priceScenario({...inputs,sellingPrice:150}),{
+  suggestedPrice:125,price:150,unitCost:100,unitProfit:50,margin:1/3,totalProfit:400,unitsToCoverCosts:2
+ });
+ assert.equal(priceScenario({...inputs,sellingPrice:null}).totalProfit,150);
+ assert.equal(priceScenario({...inputs,sellingPrice:90}).totalProfit,-200);
+ assert.equal(priceScenario({...inputs,sellingPrice:90}).unitsToCoverCosts,null);
+ assert.equal(priceScenario({...inputs,sellingPrice:null,unitCost:0,extraCost:0}),null);
 });
