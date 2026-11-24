@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
+import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, productTargetReport, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -115,4 +115,23 @@ test('period export reconciles paid sales, expenses, and the remaining tax reser
  assert.match(csv,/"'=unsafe","150.00","","-150.00","-150.00"/);
  assert.match(csv,/"Estimated tax reserve","","","","","","35.00","","0.00","-35.00"/);
  assert.match(csv,/"Total","","","","","","1000.00","600.00","235.00","200.00"/);
+});
+
+test('quarterly product goals use explicit overrides and preserve each remaining target',()=>{
+ const order=(product_id,quantity,status='Paid')=>({
+  product_id,quantity,status,date:'2026-10-01T12:00:00Z',paid_at:'2026-11-24T12:00:00Z',unit_price:20,unit_cost:10
+ });
+ const data={
+  products:[{id:1,name:'Bag'},{id:2,name:'Flag'},{id:3,name:'Cap'}],
+  orders:[order(1,55),order(2,10),order(3,20),order(2,100,'Pending')],
+  productTargets:[
+   {product_id:1,period:'2026-11',units:80},{product_id:1,period:'2026-Q4',units:50},
+   {product_id:2,period:'2026-10',units:15},{product_id:2,period:'2026-12',units:25}
+  ]
+ };
+ const report=productTargetReport(data,'2026-Q4');
+ assert.deepEqual([report.target,report.trackedSold,report.totalSold,report.remaining],[90,65,85,30]);
+ assert.equal(report.products[1].fromMonths,true);
+ assert.equal(report.products[0].target,50);
+ assert.equal(productTargetReport(data,'2026-11').products[0].remaining,25);
 });

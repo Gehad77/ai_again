@@ -150,3 +150,6 @@
 .report-toolbar { display:flex; align-items:end; flex-wrap:wrap; gap:10px; }
 .report-toolbar button { min-height:40px; }
 .expense-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+
+#product-targets { scroll-margin-top:80px; }
+#product-target-form .form-error:empty { display:none; }

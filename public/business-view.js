@@ -1,5 +1,5 @@
 import { currency, formatMoney, locale, translate } from './i18n.js';
-import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, pricingPlan, productResults, reportMargins, salesPlan } from './business-model.js';
+import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, pricingPlan, productResults, productTargetReport, quarterFor, reportMargins, salesPlan } from './business-model.js';
 
 const usd = formatMoney;
 const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
@@ -149,6 +149,7 @@ export function expensePage(data, esc, year, period){
     <button class="primary" type="button" data-section="business-expense">Record expense</button>
     <button type="button" data-download-finance>Download period report</button>
     <button type="button" data-section="business-target">Sales targets</button>
+    <button type="button" data-section="product-targets">Product targets</button>
     <button type="button" data-section="product-profit">Profit by product</button>
     <button type="button" data-section="expense-breakdown">Spending breakdown</button>
   </div>
@@ -169,6 +170,7 @@ export function expensePage(data, esc, year, period){
     </form>
   </section>
   ${salesTargets(data,esc,year,period)}
+  ${productGoals(data,esc,year,period)}
   ${productProfit(data,esc,period)}
   <section class="card recent business-card" id="expense-breakdown">
     <div class="card-head"><div><h2>Spending breakdown</h2></div></div>
@@ -203,7 +205,7 @@ function salesTargets(data,esc,year,period){
   const products=data.products.filter(p=>p.price>0);
   const report=financials(data,selected);
   return `<section class="card recent business-card">
-    <div class="card-head"><div><h2>Sales targets</h2><p>Set a revenue goal and a unit goal for the same period.</p></div></div>
+    <div class="card-head"><div><h2>Sales targets</h2><p>Set a revenue goal and a unit goal for the same period.</p></div><button type="button" data-section="product-targets">Product targets</button></div>
     <form id="business-target" class="business-form">
       <label>Target period<select name="period">${[...months,...quarters].map(p=>`<option ${p===selected?'selected':''}>${p}</option>`).join('')}</select></label>
       <label>Revenue target (${currency})<input name="amount" ${amountField} value="${target?.amount??0}" required></label>
@@ -254,18 +256,61 @@ export function bindSalesTargets(data, selectedProduct, selectProduct){
   update();
 }
 
+function productGoals(data,esc,year,period){
+  const currentMonth=businessDate(undefined,data.settings?.time_zone).slice(5,7);
+  const selected=period.length>4?period:`${year}-${currentMonth}`;
+  const quarter=selected.includes('-Q')?selected:quarterFor(selected);
+  const months=Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`);
+  const quarters=Array.from({length:4},(_,i)=>`${year}-Q${i+1}`);
+  const report=productTargetReport(data,selected);
+  const quarterReport=selected===quarter?report:productTargetReport(data,quarter);
+  const count=units=>units.toLocaleString(locale());
+  const percent=(numerator,denominator)=>denominator?marginLabel(numerator/denominator):'—';
+  const prices=new Map(data.products.map(product=>[product.id,Math.round(product.price*100)]));
+  const estimatedRevenue=quarterReport.products.reduce((sum,row)=>sum+row.target*prices.get(row.id),0)/100;
+  const quarterFinance=financials(data,quarter);
+  return `<section class="card recent business-card" id="product-targets">
+    <div class="card-head"><div><h2>Product targets</h2><p>Set a separate unit goal for each product.</p></div></div>
+    ${data.products.length?`<form id="product-target-form" class="business-form">
+      <label>Target period<select name="period">${[...months,...quarters].map(p=>`<option ${p===selected?'selected':''}>${p}</option>`).join('')}</select></label>
+      <label>Product<select name="product_id">${data.products.map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      <label>Units target<input name="units" type="number" min="0" max="2147483647" step="1" required></label>
+      <button type="submit" class="primary">Save product target</button><small>Enter zero to clear a target.</small><p class="form-error" role="alert"></p>
+    </form>`:'<p class="tax-note">Add a product to set its target.</p>'}
+    <div class="table-wrap"><table><caption>${selected}</caption><thead><tr>
+      <th>Product</th><th>Units target</th><th>Units sold</th><th>Remaining units</th><th>Target achieved</th>
+    </tr></thead><tbody>${report.products.map(row=>`<tr>
+     <td data-user-content>${esc(row.name)}</td><td>${row.target?count(row.target):'—'}${row.fromMonths?'<small>From monthly targets</small>':''}</td>
+     <td>${count(row.units)}</td><td>${row.remaining===null?'—':count(row.remaining)}</td>
+     <td>${percent(row.units,row.target)}</td></tr>`).join('')||'<tr><td colspan="5">No products yet.</td></tr>'}</tbody></table></div>
+    <div class="target-panel"><h3>Quarterly product summary <bdi>${quarter}</bdi></h3>
+     <div class="metrics">
+      ${metric('Combined product target',count(quarterReport.target))}
+      ${metric('Total units sold',count(quarterReport.totalSold))}
+      ${metric('Units sold for products with targets',count(quarterReport.trackedSold))}
+      ${metric('Total remaining across product targets',count(quarterReport.remaining))}
+      ${metric('Combined target achieved',percent(quarterReport.trackedSold,quarterReport.target))}
+      ${metric('Estimated target revenue',usd(estimatedRevenue),'At current product prices')}
+      ${metric('Quarterly gross margin',percent(quarterFinance.gross,quarterFinance.revenue))}
+     </div>
+     <p class="tax-note">For each product, an explicit quarterly target takes priority. Otherwise, the quarter adds its saved monthly targets.</p>
+    </div>
+  </section>`;
+}
+
 function productProfit(data,esc,period){
   const rows=productResults(data,period);
   const report=financials(data,period);
+  const productProfitTotal=rows.reduce((sum,row)=>sum+Math.round(row.profit*100),0)/100;
   return `<section class="card recent business-card" id="product-profit">
     <div class="card-head"><div><h2>Profit by product</h2>
     <p>Product results deduct recorded unit costs and linked expenses. General expenses are deducted in the business net result.</p></div></div>
-    <div class="metrics">${metric('Gross profit from all products',usd(report.gross))}
-    ${metric('Products after linked costs',usd(rows.reduce((sum,row)=>sum+row.profit,0)))}
+    <div class="metrics">${metric('Gross profit from all products',usd(report.gross),'Gross margin '+marginLabel(report.revenue?report.gross/report.revenue:null))}
+    ${metric('Products after linked costs',usd(productProfitTotal),'Margin after linked costs '+marginLabel(report.revenue?productProfitTotal/report.revenue:null))}
     ${metric('Total recorded spending',usd(report.recordedExpenses))}
     ${metric(report.net<0?'Current net loss':report.net>0?'Current net profit':'Current net result',usd(Math.abs(report.net)))}</div>
-    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Units sold</th><th>Sales revenue</th><th>Gross profit</th><th>Linked costs</th><th>Profit after linked costs</th></tr></thead><tbody>
-      ${rows.map(row=>`<tr><td data-user-content>${esc(row.name)}</td><td>${row.units}</td><td>${usd(row.revenue)}</td><td>${usd(row.gross)}</td><td>${usd(row.direct)}</td><td>${usd(row.profit)}</td></tr>`).join('')||'<tr><td colspan="6">No products yet.</td></tr>'}
+    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Units sold</th><th>Sales revenue</th><th>Gross profit</th><th>Linked costs</th><th>Profit after linked costs</th><th>Margin after linked costs</th></tr></thead><tbody>
+      ${rows.map(row=>`<tr><td data-user-content>${esc(row.name)}</td><td>${row.units}</td><td>${usd(row.revenue)}</td><td>${usd(row.gross)}</td><td>${usd(row.direct)}</td><td>${usd(row.profit)}</td><td>${marginLabel(row.revenue?row.profit/row.revenue:null)}</td></tr>`).join('')||'<tr><td colspan="7">No products yet.</td></tr>'}
     </tbody></table></div>
   </section>`;
 }
@@ -310,6 +355,7 @@ export function businessProfile(data, esc, year, period) {
 
 ${pricingCalculator(data.products,esc)}
   ${salesTargets(data,esc,year,period)}
+  ${productGoals(data,esc,year,period)}
   ${productProfit(data,esc,period)}
   <section class="card recent business-card">
     <div class="card-head"><div><h2>Stock movements</h2><p>Last 50 recorded movements</p></div></div>

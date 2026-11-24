@@ -249,3 +249,32 @@ export function financeCsv(data,period){
   add('Total','','','','','',report.revenue,report.cogs,report.net,tax.afterTax??report.net);
   return '\uFEFF'+rows.map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n';
 }
+
+
+export function productTargetReport(data,period){
+  const sales=new Map(productResults(data,period).map(row=>[row.id,row]));
+  const goals=new Map();
+  const monthlyTotals=new Map();
+  const quarterly=period.includes('-Q');
+  for(const target of data.productTargets??[]){
+    if(target.period===period)goals.set(target.product_id,target.units);
+    else if(quarterly&&!target.period.includes('-Q')&&quarterFor(target.period)===period){
+      monthlyTotals.set(target.product_id,(monthlyTotals.get(target.product_id)??0)+target.units);
+    }
+  }
+  const products=data.products.map(product=>{
+    const saved=goals.get(product.id);
+    const target=saved??monthlyTotals.get(product.id)??0;
+    const actual=sales.get(product.id);
+    return {...actual,target,saved,fromMonths:target>0&&saved===undefined,
+      remaining:target>0?Math.max(0,target-actual.units):null};
+  });
+  const tracked=products.filter(product=>product.target>0);
+  return {
+    products,
+    target:tracked.reduce((sum,p)=>sum+p.target,0),
+    trackedSold:tracked.reduce((sum,p)=>sum+p.units,0),
+    remaining:tracked.reduce((sum,p)=>sum+p.remaining,0),
+    totalSold:products.reduce((sum,p)=>sum+p.units,0)
+  };
+}

@@ -488,6 +488,8 @@ function bindBusinessProfile(){
  bindReportControls();
  const target=$('#business-target');
  const expenseForm=$('#business-expense');
+ bindProductGoals();
+
  if(expenseForm)bindExpenseEditing(expenseForm);
  $('[data-download-finance]').onclick=()=>downloadFinanceReport();
 
@@ -530,6 +532,38 @@ function bindBusinessProfile(){
    await refreshBusiness('Expense deleted');
   };
  });
+}
+
+function bindProductGoals(){
+ const form=$('#product-target-form');
+ if(!form)return;
+ const select=form.elements.product_id;
+ const period=form.elements.period;
+ if([...select.options].some(option=>option.value===state.goalProduct))select.value=state.goalProduct;
+ const sync=()=>{
+  state.goalProduct=select.value;
+  form.elements.units.value=(state.data.productTargets??[]).find(goal=>
+   goal.period===period.value&&goal.product_id===Number(select.value))?.units??0;
+  form.querySelector('[role=alert]').textContent='';
+ };
+ select.onchange=sync;
+ sync();
+ period.onchange=()=>{
+  state.businessPeriod=period.value;
+  render();
+  jumpToSection('product-targets');
+ };
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  const button=form.querySelector('button');
+  button.disabled=true;
+  try{
+   await api('/api/product-targets',{method:'PUT',body:JSON.stringify({
+    product_id:Number(select.value),period:period.value,units:Number(form.elements.units.value)
+   })});
+   await refreshBusiness('Product target saved');
+  }catch(error){form.querySelector('[role=alert]').textContent=error.message;button.disabled=false;}
+ };
 }
 
 function bindExpenseEditing(form){

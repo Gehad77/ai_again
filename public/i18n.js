@@ -291,6 +291,26 @@ Suggested selling price|سعر البيع المقترح
 Amount left per unit|المتبقي من كل قطعة
 Units to cover fixed expenses|عدد القطع لتغطية المصاريف الثابتة
 Sales targets|أهداف المبيعات
+Product targets|أهداف كل منتج
+Set a separate unit goal for each product.|حددي هدف عدد قطع لكل منتج لوحده.
+Save product target|حفظ هدف المنتج
+Product target saved|تم حفظ هدف المنتج
+Add a product to set its target.|ضيفي منتج عشان تحددي هدفه.
+Remaining units|القطع المتبقية
+Target achieved|نسبة تحقيق الهدف
+From monthly targets|من الأهداف الشهرية
+Quarterly product summary|ملخص أهداف المنتجات للربع
+Quarterly gross margin|هامش إجمالي الربح للربع
+Combined product target|إجمالي أهداف المنتجات بالقطع
+Total units sold|إجمالي القطع المباعة
+Units sold for products with targets|القطع المباعة من المنتجات اللي ليها أهداف
+Total remaining across product targets|إجمالي القطع المتبقية على أهداف المنتجات
+Combined target achieved|نسبة تحقيق الهدف المجمع
+Estimated target revenue|الإيراد المتوقع عند تحقيق الهدف
+At current product prices|حسب أسعار المنتجات الحالية
+For each product, an explicit quarterly target takes priority. Otherwise, the quarter adds its saved monthly targets.|لو حطيتي هدف ربع سنوي للمنتج بيتحسب هو. ولو مفيش، بنجمع أهدافه الشهرية المسجّلة في الربع.
+Margin after linked costs|هامش الربح بعد المصاريف المرتبطة
+Choose a product, period, and whole-number target.|اختاري المنتج والفترة واكتبي عدد قطع صحيح.
 Set a revenue goal and a unit goal for the same period.|حددي هدف الإيراد وهدف عدد القطع لنفس الفترة.
 Units target|هدف عدد القطع
 Estimate using|التقدير باستخدام
@@ -472,6 +492,7 @@ export function translate(text){
   [/^Based on paid sales, recorded expenses and inventory write-offs\. (.+) · (.+)\.$/,(_,code,zone)=>'الحساب بناءً على المبيعات المدفوعة والمصاريف وإهلاك المخزون. '+code+' · '+zone+'.'],
   [/^(\d+) paid units$/,(_,n)=>n+' قطعة مدفوعة'],
   [/^Recorded spending for (.+)\. Change the report period above to see another month, quarter, or year\.$/,(_,p)=>'المصروفات المسجّلة للفترة '+p+'. غيّري فترة التقرير لاختيار شهر أو ربع سنة أو سنة.'],
+  [/^Margin after linked costs (.+)$/,( _,n)=>'هامش الربح بعد المصاريف المرتبطة '+n],
   [/^Gross margin (.+)$/,(_,n)=>'هامش الربح الإجمالي '+n],
   [/^Net margin (.+)$/,(_,n)=>'هامش الربح الصافي '+n],
   [/^(\d+) of (\d+) steps completed$/,(_,n,m)=>'تم '+n+' من '+m+' خطوات']

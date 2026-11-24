@@ -140,6 +140,7 @@ export const server=http.createServer(async(req,res)=>{
    COALESCE((SELECT json_agg(m ORDER BY m.id DESC) FROM stock_movements m), '[]') AS movements,
    COALESCE((SELECT json_agg(e ORDER BY e.date DESC,e.id DESC) FROM operating_expenses e), '[]') AS expenses,
    COALESCE((SELECT json_agg(t) FROM sales_targets t), '[]') AS targets,
+   COALESCE((SELECT json_agg(t) FROM product_targets t),'[]') AS "productTargets",
    COALESCE((SELECT currency FROM workspace_settings WHERE id=1),'USD') AS currency,
    (SELECT row_to_json(s) FROM workspace_settings s WHERE id=1) AS settings,
    COALESCE((SELECT json_agg(channels) FROM (

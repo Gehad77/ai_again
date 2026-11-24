@@ -83,7 +83,11 @@ export async function initialize(){
  CREATE TABLE IF NOT EXISTS sales_targets(
   period TEXT PRIMARY KEY, amount NUMERIC(12,2) NOT NULL CHECK(amount>=0)
  );
- ALTER TABLE sales_targets ADD COLUMN IF NOT EXISTS units INTEGER NOT NULL DEFAULT 0 CHECK(units>=0);`);
+ ALTER TABLE sales_targets ADD COLUMN IF NOT EXISTS units INTEGER NOT NULL DEFAULT 0 CHECK(units>=0);
+ CREATE TABLE IF NOT EXISTS product_targets(
+  product_id INTEGER NOT NULL REFERENCES products(id),period TEXT NOT NULL,
+  units INTEGER NOT NULL CHECK(units>0),PRIMARY KEY(product_id,period)
+ );`);
  if(process.env.SEED_DEMO==='1'&&process.env.NODE_ENV!=='production'){
  const d=JSON.parse(readFileSync(new URL('./public/demo-data.json',import.meta.url),'utf8'));
  for(const x of d.overview.conversations)await c.query('INSERT INTO conversations VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',[x.id,x.name,x.initials,x.channel,x.product,x.status,x.intent,x.color]);

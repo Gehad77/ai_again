@@ -89,6 +89,19 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
     const result = await pool.query('DELETE FROM operating_expenses WHERE id=$1', [expenseId]);
     return json(res, result.rowCount ? 200 : 404, result.rowCount ? {ok:true} : {error:'Expense not found.'});
   }
+  if(route==='/api/product-targets'&&req.method==='PUT'){
+    const p=await body(req);
+    if(!isTargetPeriod(p?.period)||!Number.isInteger(p.product_id)||p.product_id<1||p.product_id>2147483647||
+      !Number.isInteger(p.units)||p.units<0||p.units>2147483647)invalid('Choose a product, period, and whole-number target.');
+    if(!(await pool.query('SELECT id FROM products WHERE id=$1',[p.product_id])).rowCount)invalid('Choose an existing product.');
+    if(p.units===0){
+      await pool.query('DELETE FROM product_targets WHERE product_id=$1 AND period=$2',[p.product_id,p.period]);
+    }else{
+      await pool.query(`INSERT INTO product_targets(product_id,period,units) VALUES($1,$2,$3)
+      ON CONFLICT(product_id,period) DO UPDATE SET units=EXCLUDED.units`,[p.product_id,p.period,p.units]);
+    }
+    return json(res,200,{ok:true});
+  }
   if (route === '/api/targets' && req.method === 'PUT') {
     const p = await body(req);
     if (!isTargetPeriod(p?.period) || !isMoney(p.amount) ||

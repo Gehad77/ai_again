@@ -65,6 +65,22 @@ test('workspace preferences save centrally and preserve the currency confirmatio
  assert.deepEqual(preferences,settings);
 });
 
+test('per-product targets are independent, owner-only, and clearable',async()=>{
+ const save=(payload,request=fetch)=>request(base+'/api/product-targets',{method:'PUT',body:JSON.stringify(payload)});
+ const target={product_id:1,period:'2026-11',units:40};
+ assert.equal((await save(target,rawFetch)).status,401);
+ assert.equal((await save({...target,units:2.5})).status,400);
+ assert.equal((await save(target)).status,200);
+ assert.equal((await save({...target,units:50})).status,200);
+ assert.equal((await save({...target,product_id:2,units:25})).status,200);
+ assert.equal((await save({...target,period:'2026-Q4',units:100})).status,200);
+ assert.equal((await save({...target,units:0})).status,200);
+ const {productTargets}=await (await fetch(base+'/api/overview')).json();
+ assert.deepEqual(productTargets.sort((a,b)=>a.product_id-b.product_id),[
+  {product_id:1,period:'2026-Q4',units:100},{product_id:2,period:'2026-11',units:25}
+ ]);
+});
+
 test('income tax planning rate is owner-only, validated and clearable',async()=>{
  const options=rate=>({method:'PUT',body:JSON.stringify({rate})});
  assert.equal((await rawFetch(base+'/api/settings/tax',options(20))).status,401);
