@@ -55,7 +55,8 @@ export async function demoApi(url,options={}){
  if(url==='/api/targets'&&method==='PUT'){
   const p=payload();
   if(!isTargetPeriod(p.period)||!isMoney(p.amount))throw Error('Enter a valid period and target amount.');
-  overview.targets=[...targets.filter(t=>t.period!==p.period),p];
+  if(p.units!==undefined&&(!Number.isInteger(p.units)||p.units<0||p.units>2147483647))throw Error('Enter a whole-number unit target.');
+  overview.targets=[...targets.filter(t=>t.period!==p.period),{...p,units:p.units??targets.find(t=>t.period===p.period)?.units??0}];
   save();return {ok:true};
  }
  const confirm=url.match(/^\/api\/orders\/(\d+)\/confirm$/);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultReportPeriod, expenseBreakdown, financials, profitGoal, pricingPlan, reportMargins } from '../public/business-model.js';
+import { defaultReportPeriod, expenseBreakdown, financials, productResults, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -57,15 +57,34 @@ test('expense reporting groups custom categories and deducts production costs on
   ]);
 });
 
-test('profit goals use whole units and the selected reporting period',()=>{
- const report={overhead:100,writeoffs:10,revenue:200,gross:50};
- assert.deepEqual(profitGoal(report,40),{revenue:600,units:null});
- assert.deepEqual(profitGoal(report,40,{price:30,unit_cost:13}),{revenue:270,units:9});
- assert.equal(profitGoal(report,40,{price:10,unit_cost:null}),null);
+test('default reporting periods and paid sales use the workspace time zone',()=>{
  const now=new Date('2026-03-31T22:30:00Z');
  assert.equal(defaultReportPeriod({time_zone:'Africa/Cairo',default_period:'quarter'},now),'2026-Q2');
  assert.equal(defaultReportPeriod({time_zone:'UTC',default_period:'quarter'},now),'2026-Q1');
  const orders=[{quantity:1,unit_price:10,unit_cost:2,status:'Paid',date:now.toISOString()}];
  assert.equal(financials({orders,settings:{time_zone:'Africa/Cairo'}},'2026-04').revenue,10);
  assert.equal(financials({orders,settings:{time_zone:'UTC'}},'2026-04').revenue,0);
+});
+
+test('revenue and unit targets are independent and first profit exceeds break-even',()=>{
+ const report={overhead:40,writeoffs:0,gross:30,revenue:90,units:3,net:-10};
+ const target={amount:150,units:10};
+ assert.deepEqual(salesPlan(report,target,{price:30,unit_cost:20}),{
+  revenueRemaining:60,unitsRemaining:7,unitsForRevenue:2,
+  coverRevenue:120,profitRevenue:150,extraUnitsToCover:1,extraUnitsToProfit:2
+ });
+ assert.equal(salesPlan(report,target).profitRevenue,150);
+ assert.equal(salesPlan({...report,units:0,gross:0},target).unitsForRevenue,null);
+});
+
+test('product profit deducts linked expenses once and excludes general expenses',()=>{
+ const data={products:[{id:1,name:'Shirt'},{id:2,name:'Cap'}],
+  orders:[{product_id:1,status:'Paid',date:'2026-11-02T08:00:00Z',quantity:2,unit_price:30,unit_cost:10}],
+  expenses:[{product_id:1,amount:20,date:'2026-11-02',included_in_product_cost:true},
+    {product_id:1,amount:5,date:'2026-11-02'},{amount:10,date:'2026-11-02'}],
+  movements:[{product_id:1,kind:'writeoff',delta:-1,unit_cost:3,date:'2026-11-02T08:00:00Z'}]};
+ assert.deepEqual(productResults(data,'2026-11')[0],{
+  id:1,name:'Shirt',units:2,revenue:60,gross:40,direct:8,profit:32
+ });
+ assert.equal(financials(data,'2026-11').net,22);
 });

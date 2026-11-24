@@ -82,12 +82,20 @@ export const quarterFor = date => date.slice(0, 4) + '-Q' + Math.ceil(Number(dat
 
 export const isInPeriod = (date, period) => period.includes('-Q') ? quarterFor(date) === period : date.startsWith(period);
 
-export function financials(data, period) {
+const cents = amount => Math.round(amount * 100);
+
+function periodEntries(data,period){
   const includes = date => isInPeriod(date, period);
-  const sales = data.orders.filter(o => o.status === 'Paid' && includes(businessDate(o.paid_at ?? o.date,data.settings?.time_zone)));
-  const expenses = (data.expenses ?? []).filter(e => includes(e.date));
-  const losses = (data.movements ?? []).filter(m => m.kind === 'writeoff' && includes(businessDate(m.date,data.settings?.time_zone)));
-  const cents = amount => Math.round(amount * 100);
+  const timeZone = data.settings?.time_zone;
+  return {
+    sales:data.orders.filter(o=>o.status==='Paid'&&includes(businessDate(o.paid_at??o.date,timeZone))),
+    expenses:(data.expenses??[]).filter(e=>includes(e.date)),
+    losses:(data.movements??[]).filter(m=>m.kind==='writeoff'&&includes(businessDate(m.date,timeZone)))
+  };
+}
+
+export function financials(data, period) {
+  const {sales,expenses,losses}=periodEntries(data,period);
   const revenue = sales.reduce((sum, o) => sum + o.quantity * cents(o.unit_price), 0);
   const cogs = sales.reduce((sum, o) => sum + o.quantity * cents(o.unit_cost), 0);
   const recordedExpenses = expenses.reduce((sum, e) => sum + cents(e.amount), 0);
@@ -133,17 +141,44 @@ export const currencies = new Set(Intl.supportedValuesOf('currency').filter(code
 ));
 
 
-export function profitGoal(report, desiredProfit, product) {
-  if (!isMoney(desiredProfit)) return null;
-  const required = Math.round(report.overhead * 100) + Math.round(report.writeoffs * 100) + Math.round(desiredProfit * 100);
-  if (product) {
-    if (product.unit_cost == null) return null;
-    const price = Math.round(product.price * 100);
-    const contribution = price - Math.round(product.unit_cost * 100);
-    if (contribution <= 0) return null;
-    const units = Math.ceil(required / contribution);
-    return {revenue:units * price / 100,units};
+export function productResults(data,period){
+  const {sales,expenses,losses}=periodEntries(data,period);
+  const rows=new Map(data.products.map(p=>[p.id,{id:p.id,name:p.name,units:0,revenue:0,gross:0,direct:0}]));
+  for(const sale of sales){
+    const row=rows.get(sale.product_id);
+    if(!row)continue;
+    const revenue=sale.quantity*cents(sale.unit_price);
+    row.revenue+=revenue;
+    row.gross+=revenue-sale.quantity*cents(sale.unit_cost);
+    row.units+=sale.quantity;
   }
-  if (report.revenue <= 0 || report.gross <= 0) return null;
-  return {revenue:Math.ceil(required * report.revenue / report.gross) / 100,units:null};
+  for(const expense of expenses){
+    const row=rows.get(expense.product_id);
+    if(row&&!expense.included_in_product_cost)row.direct+=cents(expense.amount);
+  }
+  for(const loss of losses){
+    const row=rows.get(loss.product_id);
+    if(row)row.direct-=loss.delta*cents(loss.unit_cost);
+  }
+  return [...rows.values()].map(row=>({...row,revenue:row.revenue/100,gross:row.gross/100,
+    direct:row.direct/100,profit:(row.gross-row.direct)/100}));
+}
+
+export function salesPlan(report, target, product){
+  const price=product?cents(product.price):report.units>0?cents(report.revenue)/report.units:0;
+  const contribution=product?(product.unit_cost==null?0:price-cents(product.unit_cost)):
+    report.units>0?cents(report.gross)/report.units:0;
+  const spending=cents(report.overhead)+cents(report.writeoffs);
+  const revenueRemaining=Math.max(0,cents(target.amount)-cents(report.revenue));
+  const coverRemaining=Math.max(0,-cents(report.net));
+  const profitRemaining=Math.max(0,1-cents(report.net));
+  return {
+    revenueRemaining:revenueRemaining/100,
+    unitsRemaining:Math.max(0,target.units-report.units),
+    unitsForRevenue:revenueRemaining===0?0:price>0?Math.ceil(revenueRemaining/price):null,
+    coverRevenue:contribution>0?Math.ceil(spending/contribution)*price/100:null,
+    profitRevenue:contribution>0?(Math.floor(spending/contribution)+1)*price/100:null,
+    extraUnitsToCover:coverRemaining===0?0:contribution>0?Math.ceil(coverRemaining/contribution):null,
+    extraUnitsToProfit:profitRemaining===0?0:contribution>0?Math.ceil(profitRemaining/contribution):null
+  };
 }

@@ -1,6 +1,6 @@
 import { currency, formatMoney, language, localize, locale, setCurrency, setLanguage, translate } from './i18n.js';
 import { businessDate, currencies, defaultReportPeriod, isInPeriod, timeZones } from './business-model.js';
-import { bindPricingCalculator, bindProfitGoal, businessProfile, expensePage, stockDialog, warehouseSummary } from './business-view.js';
+import { bindPricingCalculator, bindSalesTargets, businessProfile, expensePage, stockDialog, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
 const staticSite=location.hostname.endsWith('github.io');
 const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',analytics:'▥',integrations:'⌘',settings:'⚙'};
@@ -259,14 +259,7 @@ async function refreshBusiness(message){
 
 function bindBusinessProfile(){
  if(state.page==='profile')bindPricingCalculator(state.data);
- else bindProfitGoal(state.data,state.businessPeriod,amount=>{
-  state.targetDraft=amount;
-  state.page='profile';
-  history.replaceState(null,'',location.pathname+location.search+'#profile');
-  render();
-  $('#business-target').scrollIntoView();
-  $('#business-target').elements.amount.focus();
- });
+ bindSalesTargets(state.data);
  $('#business-year').onchange=e=>{
   if(!e.target.value||!e.target.checkValidity())return;
   state.businessYear=e.target.value;
@@ -275,12 +268,10 @@ function bindBusinessProfile(){
  };
  $('#business-period').onchange=e=>{state.businessPeriod=e.target.value;render();};
  const target=$('#business-target');
- if(target){
-  const syncAmount=()=>{target.elements.amount.value=state.data.targets?.find(t=>t.period===target.elements.period.value)?.amount??'';};
-  target.elements.period.onchange=syncAmount;
-  syncAmount();
-  if(state.targetDraft!==undefined){target.elements.amount.value=state.targetDraft;delete state.targetDraft;}
- }
+ target.elements.period.onchange=()=>{
+  state.businessPeriod=target.elements.period.value;
+  render();
+ };
  for(const [form, url, method, message] of [
   [target,'/api/targets','PUT','Target saved'],
   [$('#business-expense'),'/api/expenses','POST','Expense recorded']
@@ -292,7 +283,10 @@ function bindBusinessProfile(){
    button.disabled=true;
    const payload=Object.fromEntries(new FormData(form));
    payload.amount=Number(payload.amount);
-   if(form!==target){
+   if(form===target){
+    payload.units=Number(payload.units);
+    delete payload.estimate_product;
+   }else{
     payload.product_id=payload.product_id?Number(payload.product_id):null;
     payload.included_in_product_cost=form.elements.included_in_product_cost.checked;
    }

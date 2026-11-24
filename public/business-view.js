@@ -1,5 +1,5 @@
 import { currency, formatMoney, locale, translate } from './i18n.js';
-import { businessDate, financials, expenseBreakdown, expenseCategories, pricingPlan, profitGoal, quarterFor, reportMargins } from './business-model.js';
+import { businessDate, financials, expenseBreakdown, expenseCategories, pricingPlan, productResults, reportMargins, salesPlan } from './business-model.js';
 
 const usd = formatMoney;
 const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
@@ -41,7 +41,7 @@ function starterTasks(data){
     [hasCost, 'Set a unit cost for at least one product', '#business-warehouse'],
     [data.orders.some(o => o.status === 'Paid'), 'Record your first paid sale', '#business-warehouse'],
     [(data.expenses ?? []).length > 0, 'Record an operating expense', '#expenses'],
-    [(data.targets ?? []).some(t => t.amount > 0), 'Set a monthly or quarterly sales target', '#business-target']
+    [(data.targets ?? []).some(t => t.amount > 0 || t.units > 0), 'Set a monthly or quarterly sales target', '#business-target']
   ];
   if(steps.every(([done])=>done))return '';
   return `<section class="card recent business-card"><div class="card-head"><div>
@@ -154,56 +154,78 @@ export function expensePage(data, esc, year, period){
       </tbody></table>
     </div>
   </section>
-  <section class="card recent business-card">
-    <div class="card-head"><div><h2>Profit target calculator</h2><p>Uses the selected period’s recorded expenses and write-offs. Enter zero to calculate break-even.</p></div></div>
-    <form id="profit-goal" class="business-form">
-      <label>Desired net profit (${currency})<input name="profit" ${amountField} required></label>
-      <label>Margin source<select name="product"><option value="">Recorded sales margin</option>
-      ${data.products.filter(p=>p.unit_cost!=null&&p.price>p.unit_cost).map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
-      <button class="primary">Calculate target</button><p class="form-error" role="alert"></p>
+  ${salesTargets(data,esc,year,period)}
+  ${productProfit(data,esc,period)}`;
+}
+
+function salesTargets(data,esc,year,period){
+  const month=businessDate(undefined,data.settings?.time_zone).slice(5,7);
+  const selected=period.length>4?period:`${year}-${month}`;
+  const months=Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`);
+  const quarters=Array.from({length:4},(_,i)=>`${year}-Q${i+1}`);
+  const target=(data.targets??[]).find(t=>t.period===selected);
+  const products=data.products.filter(p=>p.price>0);
+  const report=financials(data,selected);
+  return `<section class="card recent business-card">
+    <div class="card-head"><div><h2>Sales targets</h2><p>Set a revenue goal and a unit goal for the same period.</p></div></div>
+    <form id="business-target" class="business-form">
+      <label>Target period<select name="period">${[...months,...quarters].map(p=>`<option ${p===selected?'selected':''}>${p}</option>`).join('')}</select></label>
+      <label>Revenue target (${currency})<input name="amount" ${amountField} value="${target?.amount??0}" required></label>
+      <label>Units target<input name="units" type="number" min="0" max="2147483647" step="1" value="${target?.units??0}" required></label>
+      <label>Estimate using<select name="estimate_product"><option value="">Average recorded sale</option>
+        ${products.map(p=>`<option data-user-content value="${p.id}" ${!report.units&&products.length===1?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>
+      <button class="primary">Save targets</button><small>Enter zero to clear a target.</small><p class="form-error" role="alert"></p>
     </form>
-    <div class="metrics" id="profit-goal-result" role="status"></div>
+    <div class="metrics" id="sales-goal-result" role="status"></div>
   </section>`;
 }
 
-export function bindProfitGoal(data,period,useTarget){
-  const form=document.querySelector('#profit-goal');
-  const result=document.querySelector('#profit-goal-result');
-  const error=form.querySelector('[role=alert]');
-  form.oninput=()=>{result.innerHTML='';error.textContent='';};
-  form.onsubmit=event=>{
-    event.preventDefault();
-    result.innerHTML='';
-    error.textContent='';
-    const product=data.products.find(p=>p.id===Number(form.elements.product.value));
-    const report=financials(data,period);
-    const goal=profitGoal(report,Number(form.elements.profit.value),product);
-    if(!goal){
-      error.textContent='Select a product with a positive margin or record sales with a positive gross margin.';
-      return;
-    }
-    result.innerHTML=metric('Revenue target',usd(goal.revenue),product?'Assumes all sales are for the selected product':'Estimate at the recorded gross margin')+
-      (product?'':metric('Revenue still needed',usd(Math.max(0,goal.revenue-report.revenue))))+
-      (goal.units===null?'':metric('Units needed',goal.units.toLocaleString(locale())));
-    if(period.length>4&&goal.revenue>0&&goal.revenue<=9999999999.99){
-      const button=document.createElement('button');
-      button.type='button';
-      button.textContent='Use as sales target';
-      button.onclick=()=>useTarget(goal.revenue);
-      result.append(button);
-    }
+export function bindSalesTargets(data){
+  const form=document.querySelector('#business-target');
+  const result=document.querySelector('#sales-goal-result');
+  const report=financials(data,form.elements.period.value);
+  const displayMoney=value=>value===null?'—':usd(value);
+  const displayUnits=value=>value===null?'—':value.toLocaleString(locale());
+  const update=()=>{
+    const target={amount:Number(form.elements.amount.value),units:Number(form.elements.units.value)};
+    const product=data.products.find(p=>p.id===Number(form.elements.estimate_product.value));
+    const plan=salesPlan(report,target,product);
+    const basis=product?'At the selected product price and unit cost':'At the average recorded price and margin';
+    result.innerHTML=[
+      metric('Paid sales',usd(report.revenue)),metric('Units sold',displayUnits(report.units)),
+      metric('Revenue still needed',target.amount>0?usd(plan.revenueRemaining):'—'),
+      metric('Units left for unit target',target.units>0?displayUnits(plan.unitsRemaining):'—'),
+      metric('Extra units for revenue target',target.amount>0?displayUnits(plan.unitsForRevenue):'—',basis),
+      metric('Total sales to cover expenses',displayMoney(plan.coverRevenue),basis),
+      metric('Total sales to start making a profit',displayMoney(plan.profitRevenue),basis),
+      metric('Extra units to break even',displayUnits(plan.extraUnitsToCover)),
+      metric('Extra units to start making a profit',displayUnits(plan.extraUnitsToProfit)),
+      metric(report.net<0?'Current net loss':report.net>0?'Current net profit':'Current net result',usd(Math.abs(report.net)))
+    ].join('')+ (plan.coverRevenue===null?'<p class="notice">Select a product with a price and a positive unit margin, or record profitable sales, to estimate break-even.</p>':'');
   };
+  form.oninput=()=>{if(form.checkValidity())update();};
+  update();
+}
+
+function productProfit(data,esc,period){
+  const rows=productResults(data,period);
+  const report=financials(data,period);
+  return `<section class="card recent business-card">
+    <div class="card-head"><div><h2>Profit by product</h2>
+    <p>Product results deduct recorded unit costs and linked expenses. General expenses are deducted in the business net result.</p></div></div>
+    <div class="metrics">${metric('Gross profit from all products',usd(report.gross))}
+    ${metric('Products after linked costs',usd(rows.reduce((sum,row)=>sum+row.profit,0)))}
+    ${metric('Total recorded spending',usd(report.recordedExpenses))}
+    ${metric(report.net<0?'Current net loss':report.net>0?'Current net profit':'Current net result',usd(Math.abs(report.net)))}</div>
+    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Units sold</th><th>Sales revenue</th><th>Gross profit</th><th>Linked costs</th><th>Profit after linked costs</th></tr></thead><tbody>
+      ${rows.map(row=>`<tr><td data-user-content>${esc(row.name)}</td><td>${row.units}</td><td>${usd(row.revenue)}</td><td>${usd(row.gross)}</td><td>${usd(row.direct)}</td><td>${usd(row.profit)}</td></tr>`).join('')||'<tr><td colspan="6">No products yet.</td></tr>'}
+    </tbody></table></div>
+  </section>`;
 }
 
 export function businessProfile(data, esc, year, period) {
-  const today = businessDate(undefined, data.settings?.time_zone);
-  const month = today.slice(0, 7);
-  const quarter = quarterFor(today);
   const report = financials(data, period);
   const margins = reportMargins(report);
-  const months = Array.from({length:12}, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
-  const quarters = Array.from({length:4}, (_, i) => `${year}-Q${i+1}`);
-  const targets = data.targets ?? [];
   const costValue = data.products.reduce((sum, p) => sum + p.stock * (p.unit_cost ?? 0), 0);
   const unknown = data.products.filter(p => p.stock && p.unit_cost == null).length;
   const productName = id => esc(data.products.find(p => p.id === id)?.name ?? 'Unknown product');
@@ -238,22 +260,8 @@ export function businessProfile(data, esc, year, period) {
   </section>
 
 ${pricingCalculator(data.products,esc)}
-  <section class="card recent business-card">
-    <div class="card-head"><div><h2>Sales targets</h2><p>Track paid revenue toward independent monthly and quarterly goals.</p></div></div>
-    <div class="metrics">${[...new Set([month, quarter, ...(period.length > 4 ? [period] : [])])].map(p => {
-      const target = targets.find(t => t.period === p)?.amount;
-      const revenue = financials(data, p).revenue;
-      const percent = target ? Math.round(revenue / target * 100) : null;
-      return `<article class="metric"><div>${p}</div><strong>${usd(revenue)}</strong>
-        ${target ? `<progress max="100" value="${Math.min(100, percent)}" aria-label="${p} sales progress"></progress>
-        <small>${percent}% of ${usd(target)} · ${usd(Math.max(0, target - revenue))} remaining</small>` : '<small>No sales target set</small>'}</article>`;
-    }).join('')}</div>
-    <form id="business-target" class="business-form">
-      <label>Target period<select name="period">${[...quarters, ...months].map(p => `<option ${p === (period.length > 4 ? period : month) ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
-      <label>Revenue target (${currency})<input name="amount" ${amountField} required></label>
-      <button class="primary">Save target</button><p class="form-error" role="alert"></p>
-    </form>
-  </section>
+  ${salesTargets(data,esc,year,period)}
+  ${productProfit(data,esc,period)}
   <section class="card recent business-card">
     <div class="card-head"><div><h2>Stock movements</h2><p>Last 50 recorded movements</p></div></div>
     <div class="table-wrap"><table><thead><tr><th>Date</th><th>Product</th><th>Movement</th><th>Units</th><th>Stock after</th><th>Reference</th></tr></thead><tbody>

@@ -216,6 +216,33 @@ Suggested selling price|سعر البيع المقترح
 Amount left per unit|المتبقي من كل قطعة
 Units to cover fixed expenses|عدد القطع لتغطية المصاريف الثابتة
 Sales targets|أهداف المبيعات
+Set a revenue goal and a unit goal for the same period.|حددي هدف الإيراد وهدف عدد القطع لنفس الفترة.
+Units target|هدف عدد القطع
+Estimate using|التقدير باستخدام
+Average recorded sale|متوسط سعر وهامش المبيعات المسجّلة
+Save targets|حفظ الأهداف
+Enter zero to clear a target.|اكتبي صفر لإلغاء أي هدف.
+Paid sales|المبيعات المدفوعة
+Units left for unit target|القطع المتبقية لهدف عدد القطع
+Extra units for revenue target|القطع الإضافية المطلوبة لهدف الإيراد
+Total sales to cover expenses|إجمالي المبيعات لتغطية المصاريف
+Total sales to start making a profit|إجمالي المبيعات لبدء تحقيق ربح
+Extra units to break even|قطع إضافية لتغطية الخسارة
+Extra units to start making a profit|قطع إضافية لبدء تحقيق ربح
+At the selected product price and unit cost|حسب سعر وتكلفة المنتج المختار
+At the average recorded price and margin|حسب متوسط السعر والهامش المسجّل
+Current net loss|صافي الخسارة الحالية
+Current net profit|صافي الربح الحالي
+Current net result|صافي نتيجة النشاط
+Profit by product|الربح لكل منتج
+Product results deduct recorded unit costs and linked expenses. General expenses are deducted in the business net result.|ربح كل منتج بعد تكلفة القطع ومصاريفه المرتبطة. المصاريف العامة بتتخصم في صافي نتيجة النشاط.
+Gross profit from all products|إجمالي ربح كل المنتجات قبل المصاريف
+Products after linked costs|ربح المنتجات بعد مصاريفها المرتبطة
+Linked costs|المصاريف المرتبطة
+Profit after linked costs|الربح بعد المصاريف المرتبطة
+No products yet.|مفيش منتجات لسه.
+Select a product with a price and a positive unit margin, or record profitable sales, to estimate break-even.|اختاري منتج بسعر وهامش موجب أو سجّلي مبيعات مربحة عشان يظهر تقدير نقطة التعادل.
+Enter a valid period, revenue target and whole-number unit target.|اختاري فترة واكتبي هدف إيراد صالح وعدد قطع صحيح.
 Target period|فترة الهدف
 Revenue target|الإيراد المستهدف
 Save target|حفظ الهدف

@@ -87,9 +87,13 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
   }
   if (route === '/api/targets' && req.method === 'PUT') {
     const p = await body(req);
-    if (!isTargetPeriod(p?.period) || !isMoney(p.amount)) invalid('Enter a valid period and target amount.');
-    await pool.query(`INSERT INTO sales_targets(period,amount) VALUES($1,$2)
-      ON CONFLICT(period) DO UPDATE SET amount=EXCLUDED.amount`, [p.period, p.amount]);
+    if (!isTargetPeriod(p?.period) || !isMoney(p.amount) ||
+        (p.units !== undefined && (!Number.isInteger(p.units) || p.units < 0 || p.units > 2147483647))) {
+      invalid('Enter a valid period, revenue target and whole-number unit target.');
+    }
+    await pool.query(`INSERT INTO sales_targets(period,amount,units) VALUES($1,$2,COALESCE($3::int,0))
+      ON CONFLICT(period) DO UPDATE SET amount=EXCLUDED.amount,units=COALESCE($3::int,sales_targets.units)`,
+      [p.period, p.amount, p.units??null]);
     return json(res, 200, {ok:true});
   }
 }

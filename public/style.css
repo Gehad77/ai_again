@@ -37,4 +37,4 @@
 #workspace-form select, #workspace-form input:not([type="checkbox"]) { min-height:40px; max-width:100%; }
 #currency-change-note { flex-basis:100%; }
 #currency-change-note small { display:block; margin-top:8px; }
-#profit-goal-result:empty, #workspace-form .form-error:empty, #profit-goal .form-error:empty { display:none; }
+#sales-goal-result:empty, #workspace-form .form-error:empty, #business-target .form-error:empty { display:none; }

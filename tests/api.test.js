@@ -142,6 +142,8 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  for (const period of ['2026-11','2026-Q4']) {
   assert.equal((await send('/api/targets','PUT',{period,amount:50})).status, 200);
  }
+ assert.equal((await send('/api/targets','PUT',{period:'2026-Q4',amount:70,units:100})).status,200);
+ assert.equal((await send('/api/targets','PUT',{period:'2026-Q4',amount:70,units:1.5})).status,400);
  assert.equal((await send('/api/targets','PUT',{period:'2026-Q4',amount:100})).status, 200);
  const data = await (await fetch(base+'/api/overview')).json();
  assert.equal(data.products.find(p=>p.id===id).stock, 3);
@@ -154,6 +156,7 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  assert.equal(movements[2].unit_cost, 8);
  assert.equal(data.expenses.find(e=>e.description==='Warehouse rent').date, '2026-11-22');
  assert.equal(data.expenses.find(e=>e.description==='Warehouse rent').category,'Uncategorized');
+ assert.equal(data.targets.find(t=>t.period==='2026-Q4').units,100);
  const cotton=data.expenses.find(e=>e.description==='Cotton');
  assert.equal(cotton.product_id,id);
  assert.equal(cotton.included_in_product_cost,true);
