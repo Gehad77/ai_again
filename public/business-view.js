@@ -157,8 +157,12 @@ export function expensePage(data, esc, year, period){
     const key=expense.product_id??null;
     byProduct.set(key,(byProduct.get(key)??0)+Math.round(expense.amount*100));
   }
-  const categories = expenseBreakdown((data.expenses ?? [])).map(row => row.name)
-    .filter(name => name !== 'Uncategorized' && !expenseCategories.includes(name));
+  const categories = new Map(expenseCategories.map(name => [name.toLowerCase(),name]));
+  for(const {name} of expenseBreakdown(data.expenses??[])){
+    const key=name.toLowerCase();
+    if(!categories.has(key))categories.set(key,name);
+  }
+  const allCategories=[...categories.values()];
   const breakdown = expenseBreakdown(report.expenses);
   return `<div class="heading finance-heading"><div><h1>Expenses</h1><p>Track spending by category and product.</p></div>${periodControls(year,period)}</div>
   <div class="metrics finance-summary expense-overview">
@@ -180,7 +184,7 @@ export function expensePage(data, esc, year, period){
     <div class="card-head"><div><h2 id="add-expense-title">Record expense</h2></div></div>
     <form id="business-expense" class="business-form">
       <label>Category<input name="category" list="expense-categories" maxlength="60" placeholder="Choose or type a category" required></label>
-      <datalist id="expense-categories">${[...expenseCategories,...categories].map(name=>`<option value="${esc(name)}" label="${esc(translate(name))}"></option>`).join('')}</datalist>
+      <datalist id="expense-categories">${allCategories.filter(name=>name.toLowerCase()!=='uncategorized').map(name=>`<option value="${esc(name)}" label="${esc(translate(name))}"></option>`).join('')}</datalist>
       <label>Expense description<input name="description" maxlength="160" placeholder="e.g. Cotton for T-shirts" required></label>
       <label>Amount (${currency})<input name="amount" ${amountField.replace('min="0"','min="0.01"')} required></label>
       <label>Expense date<input name="date" type="date" value="${today}" required></label>
@@ -193,7 +197,7 @@ export function expensePage(data, esc, year, period){
       <p class="form-error" role="alert"></p>
     </form>
   </section>
-  ${expenseLedger(data,esc,report,breakdown)}
+  ${expenseLedger(data,esc,report,allCategories)}
   ${salesTargets(data,esc,year,period)}
   ${productGoals(data,esc,year,period)}
   ${productProfit(data,esc,period)}
@@ -214,7 +218,7 @@ export function expensePage(data, esc, year, period){
   </section>`;
 }
 
-function expenseLedger(data,esc,report,breakdown){
+function expenseLedger(data,esc,report,allCategories){
   const names=new Map(data.products.map(p=>[p.id,p.name]));
   const cell=(label,value,attrs='')=>`<td role="cell" data-label="${esc(translate(label))}" ${attrs}><span>${value}</span></td>`;
   return `<section class="card recent business-card" id="expense-ledger">
@@ -222,7 +226,7 @@ function expenseLedger(data,esc,report,breakdown){
    <form id="expense-filters" class="business-form" role="search">
     <label>Search descriptions<input name="query" type="search" placeholder="Search descriptions"></label>
     <label>Category<select name="category"><option value="">All categories</option>
-     ${breakdown.map(row=>`<option value="${esc(row.name)}">${esc(translate(row.name))}</option>`).join('')}</select></label>
+     ${allCategories.map(name=>`<option value="${esc(name)}">${esc(translate(name))}</option>`).join('')}</select></label>
     <label>Product<select name="product"><option value="">All products</option><option value="general">General expense</option>
      ${data.products.map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
     <button type="button" id="clear-expense-filters">Clear filters</button>
