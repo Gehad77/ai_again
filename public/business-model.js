@@ -49,3 +49,28 @@ export function financials(data, period) {
     units: sales.reduce((sum, o) => sum + o.quantity, 0)
   };
 }
+
+export function pricingPlan(unitCost, extraCost, margin, fixedCosts) {
+  if (![unitCost, extraCost, fixedCosts].every(isMoney) ||
+      !Number.isFinite(margin) || margin <= 0 || margin >= 100) return null;
+  const cost = Math.round(unitCost * 100) + Math.round(extraCost * 100);
+  if (!cost) return null;
+  const marginBasisPoints = Math.round(margin * 100);
+  if (!marginBasisPoints || marginBasisPoints >= 10000) return null;
+  const price = Math.ceil(cost * 10000 / (10000 - marginBasisPoints));
+  const contribution = price - cost;
+  return {
+    price: price / 100,
+    contribution: contribution / 100,
+    unitsToCoverCosts: Math.ceil(Math.round(fixedCosts * 100) / contribution)
+  };
+}
+
+export function reportMargins(report) {
+  return {
+    grossMargin: report.revenue > 0 ? report.gross / report.revenue : null,
+    netMargin: report.revenue > 0 ? report.net / report.revenue : null,
+    revenueToBreakEven: report.net >= 0 ? 0 : report.gross > 0 && report.revenue > 0
+      ? Math.ceil(-report.net * report.revenue / report.gross * 100) / 100 : null
+  };
+}

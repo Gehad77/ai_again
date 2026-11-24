@@ -17,3 +17,8 @@
 .warehouse-detail { margin-bottom:24px; }
 .warehouse-detail summary { padding:16px 20px; cursor:pointer; font-weight:600; }
 .new-customer-link { display:inline-block; margin-inline:12px; }
+.starter-steps { display:grid; gap:8px; margin:16px 20px 0; padding:0; list-style:none; }
+.starter-steps a { text-decoration:underline; text-underline-offset:3px; }
+.starter-steps small { margin-inline-start:8px; color:var(--muted); }
+#business-warehouse, #business-expense, #business-target { scroll-margin-top:90px; }
+#pricing-result:empty, #pricing-calculator .form-error:empty { display:none; }

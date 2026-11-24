@@ -1,7 +1,9 @@
-import { businessDate, financials, quarterFor } from './business-model.js';
+import { businessDate, financials, pricingPlan, quarterFor, reportMargins } from './business-model.js';
 
 const money = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'});
 const usd = amount => money.format(amount);
+const percentage = new Intl.NumberFormat('en-US', {style:'percent', maximumFractionDigits:1});
+const marginLabel = margin => margin === null ? '—' : percentage.format(margin);
 const amountField = 'type="number" min="0" max="9999999999.99" step="0.01"';
 const kinds = {opening:'Opening stock', sale:'Paid sale', restock:'Restock', correction:'Correction', writeoff:'Write-off'};
 const metric = (label, value, caption = '') => `
@@ -31,11 +33,75 @@ export function warehouseSummary(data, esc) {
   </section>`;
 }
 
+function starterTasks(data){
+  const hasCost = data.products.some(p => p.unit_cost != null);
+  const hasProduct = data.products.length > 0;
+  const steps = [
+    [hasProduct, 'Add your first product', '#business-warehouse'],
+    [hasCost, 'Set a unit cost for at least one product', '#business-warehouse'],
+    [data.orders.some(o => o.status === 'Paid'), 'Record your first paid sale', '#business-warehouse'],
+    [(data.expenses ?? []).length > 0, 'Record an operating expense', '#business-expense'],
+    [(data.targets ?? []).some(t => t.amount > 0), 'Set a monthly or quarterly sales target', '#business-target']
+  ];
+  if(steps.every(([done])=>done))return '';
+  return `<section class="card recent business-card"><div class="card-head"><div>
+    <h2>Set up your business</h2><p>${steps.filter(([done]) => done).length} of ${steps.length} steps completed</p></div></div>
+    <ul class="starter-steps">${steps.map(([done,label,anchor])=>
+      `<li>${done?'✓':'○'} <a href="${anchor}">${label}</a>${done?' <small>Complete</small>':''}</li>`
+    ).join('')}</ul></section>`;
+}
+
+function pricingCalculator(products, esc){
+  return `<section class="card recent business-card"><div class="card-head"><div>
+    <h2>Pricing calculator</h2><p>Estimate a selling price and how many units would cover your planned expenses.</p></div></div>
+    <form id="pricing-calculator" class="business-form">
+      <label>Product <select name="product"><option value="">Manual estimate</option>
+        ${products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      <label>Product cost per unit ($)<input name="cost" ${amountField} required></label>
+      <label>Other cost per unit ($)<input name="extra" ${amountField} value="0" required></label>
+      <label>Target margin (%)<input name="margin" type="number" step="0.01" min="0.01" max="99.99" value="30" required></label>
+      <label>Planned fixed expenses ($)<input name="fixed" ${amountField} value="0" required></label>
+      <button class="primary">Calculate</button>
+      <p class="form-error" role="alert"></p>
+    </form>
+    <div id="pricing-result" class="metrics" role="status"></div>
+  </section>`;
+}
+
+export function bindPricingCalculator(data){
+  const form = document.querySelector('#pricing-calculator');
+  const result = document.querySelector('#pricing-result');
+  const clear = () => {
+    result.innerHTML = '';
+    form.querySelector('.form-error').textContent = '';
+  };
+  form.oninput = clear;
+  form.elements.product.onchange = () => {
+    const product = data.products.find(p => p.id === Number(form.elements.product.value));
+    form.elements.cost.value = product?.unit_cost ?? '';
+    clear();
+  };
+  form.onsubmit = event => {
+    event.preventDefault();
+    clear();
+    const {cost,extra,margin,fixed} = Object.fromEntries(new FormData(form));
+    const plan = pricingPlan(Number(cost),Number(extra),Number(margin),Number(fixed));
+    if(!plan){
+      form.querySelector('.form-error').textContent = 'Enter a positive total unit cost and a margin between 0.01% and 99.99%.';
+      return;
+    }
+    result.innerHTML = metric('Suggested selling price',usd(plan.price),'Rounded up to the nearest cent')+
+      metric('Amount left per unit',usd(plan.contribution),'After the unit costs entered above')+
+      metric('Units to cover fixed expenses',plan.unitsToCoverCosts.toLocaleString(), 'At the suggested selling price');
+  };
+}
+
 export function businessProfile(data, esc, year, period) {
   const today = businessDate();
   const month = today.slice(0, 7);
   const quarter = quarterFor(today);
   const report = financials(data, period);
+  const margins = reportMargins(report);
   const months = Array.from({length:12}, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const quarters = Array.from({length:4}, (_, i) => `${year}-Q${i+1}`);
   const periods = [String(year), ...quarters, ...months];
@@ -45,7 +111,8 @@ export function businessProfile(data, esc, year, period) {
   const productName = id => esc(data.products.find(p => p.id === id)?.name ?? 'Unknown product');
   return `
   <div class="heading"><h1>Business profile</h1><p>Manage products, warehouse movements, expenses and sales targets.</p></div>
-  <section class="card recent business-card">
+  ${starterTasks(data)}
+  <section class="card recent business-card" id="business-warehouse">
     <div class="card-head"><div><h2>Warehouse</h2><p>Recorded stock cost ${usd(costValue)}${unknown ? ` · ${unknown} stocked products need a unit cost` : ''}</p></div>
     <div><button data-create="order">Record sale</button> <button class="primary" data-create="product">Add product</button></div></div>
     <div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Selling price</th><th>Unit cost</th><th>Actions</th></tr></thead><tbody>
@@ -62,10 +129,13 @@ export function businessProfile(data, esc, year, period) {
     <div class="metrics">
       ${metric('Sales revenue', usd(report.revenue), `${report.units} paid units`)}
       ${metric('Cost of goods sold', usd(report.cogs))}
-      ${metric('Gross profit', usd(report.gross))}
+      ${metric('Gross profit', usd(report.gross), 'Gross margin ' + marginLabel(margins.grossMargin))}
       ${metric('Operating expenses', usd(report.overhead))}
       ${metric('Inventory write-offs', usd(report.writeoffs))}
-      ${metric('Net profit / loss', usd(report.net))}
+      ${metric('Net profit / loss', usd(report.net), 'Net margin ' + marginLabel(margins.netMargin))}
+      ${metric('Extra sales to break even',
+         margins.revenueToBreakEven === null || (!report.revenue && !report.net) ? '—' : usd(margins.revenueToBreakEven),
+         margins.revenueToBreakEven === null ? 'Requires sales with a positive gross margin' : 'Estimate at the same gross margin and expenses')}
     </div>
     <form id="business-expense" class="business-form">
       <label>Expense description<input name="description" maxlength="160" required></label>
@@ -77,6 +147,7 @@ export function businessProfile(data, esc, year, period) {
       ${report.expenses.map(e => `<tr><td>${esc(e.description)}</td><td>${e.date}</td><td>${usd(e.amount)}</td><td><button data-delete-expense="${e.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="4">No recorded expenses this period.</td></tr>'}
     </tbody></table></div>
   </section>
+${pricingCalculator(data.products,esc)}
   <section class="card recent business-card">
     <div class="card-head"><div><h2>Sales targets</h2><p>Track paid revenue toward independent monthly and quarterly goals.</p></div></div>
     <div class="metrics">${[...new Set([month, quarter, ...(period.length > 4 ? [period] : [])])].map(p => {

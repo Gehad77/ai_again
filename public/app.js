@@ -1,10 +1,10 @@
 import { businessDate, isInPeriod } from './business-model.js';
-import { businessProfile, stockDialog, warehouseSummary } from './business-view.js';
+import { bindPricingCalculator, businessProfile, stockDialog, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
 import { demoApi } from './demo.js';
 const preview=location.hostname.endsWith('github.io')||new URLSearchParams(location.search).has('demo');
 const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',analytics:'▥',integrations:'⌘',settings:'⚙'};
-let state={page:location.hash==='#profile'?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
+let state={page:['#profile','#business-warehouse','#business-expense','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
 const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const api=async(url,options)=>{if(location.hostname.endsWith('github.io')||new URLSearchParams(location.search).has('demo'))return demoApi(url,options);const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error);return d;};
 const toast=t=>{$('#toast').textContent=t;$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),3000);};
@@ -206,6 +206,7 @@ async function refreshBusiness(message){
 }
 
 function bindBusinessProfile(){
+ bindPricingCalculator(state.data);
  $('#business-year').onchange=e=>{
   if(!e.target.value||!e.target.checkValidity())return;
   state.businessYear=e.target.value;
