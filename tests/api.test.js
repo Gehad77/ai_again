@@ -164,14 +164,21 @@ test('hosting recovery changes the existing owner once and preserves business da
  const password='owner-new-password-123';
  const accessCode='test-only-recovery-code-abcdefghijklmnopqrstuvwxyz123';
  assert.equal((await recover(accessCode,password)).status,400);
+ const sessionStatus=async()=> (await (await rawFetch(base+'/api/auth/session')).json()).adminRecoveryStatus;
+ assert.equal(await sessionStatus(),'missing_settings');
  process.env.OWNER_EMAIL='restored@example.com';
  process.env.OWNER_ACCESS_CODE=accessCode;
  try{
-  assert.equal((await (await rawFetch(base+'/api/auth/session')).json()).adminRecoveryEnabled,true);
+  process.env.OWNER_ACCESS_CODE='short';
+  assert.equal(await sessionStatus(),'invalid_code');
+  process.env.OWNER_ACCESS_CODE=accessCode;
+  assert.equal(await sessionStatus(),'ready');
   assert.equal((await recover(accessCode+'wrong',password)).status,400);
   const attempts=await Promise.all([recover(accessCode,password),recover(accessCode,password)]);
   assert.deepEqual(attempts.map(result=>result.status).sort(),[200,400]);
-  assert.equal((await (await rawFetch(base+'/api/auth/session')).json()).adminRecoveryEnabled,false);
+  assert.equal(await sessionStatus(),'used_code');
+  const recoveryCookie=attempts.find(result=>result.ok).headers.get('set-cookie').split(';')[0];
+  assert.equal((await rawFetch(base+'/api/overview',{headers:{cookie:recoveryCookie}})).status,200);
   const login=await rawFetch(base+'/api/auth/signin',{method:'POST',body:JSON.stringify({email:'restored@example.com',password})});
   assert.equal(login.status,200);
   const oldLogin=await rawFetch(base+'/api/auth/signin',{method:'POST',body:JSON.stringify({

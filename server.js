@@ -1,4 +1,4 @@
-import { adminRecoveryAvailable, resetWithAccessCode } from './owner-access-code.js';
+import { adminRecoveryStatus, resetWithAccessCode } from './owner-access-code.js';
 import { ownerEmail, recoveryEnabled, recover } from './owner-recovery.js';
 import http from 'node:http';
 import {businessRoutes,recordSale} from './business.js';
@@ -16,6 +16,7 @@ import path from 'node:path';
 const root = path.dirname(fileURLToPath(import.meta.url));
 await initialize();
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
+const ownerCookie=token=>`relay_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${process.env.NODE_ENV==='production'?'; Secure':''}`;
 export const server=http.createServer(async(req,res)=>{
  try {
  const url=new URL(req.url,'http://localhost'); const route=url.pathname;
@@ -26,10 +27,15 @@ export const server=http.createServer(async(req,res)=>{
  const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('relay_session='))?.slice(14)||'';
  const signedIn=!!(await pool.query('SELECT token FROM sessions WHERE token=$1 AND expires_at>NOW()',[digest(cookie)])).rowCount;
  const configured=!!(await pool.query('SELECT id FROM users')).rowCount;
- if(route==='/api/auth/session'&&req.method==='GET')return json(res,200,{signedIn,configured,recoveryEnabled:recoveryEnabled(),adminRecoveryEnabled:await adminRecoveryAvailable(),ownerSetupFromHost:process.env.NODE_ENV==='production'});
+ if(route==='/api/auth/session'&&req.method==='GET'){
+  const status=await adminRecoveryStatus();
+  return json(res,200,{signedIn,configured,recoveryEnabled:recoveryEnabled(),adminRecoveryEnabled:status==='ready',adminRecoveryStatus:status,ownerSetupFromHost:process.env.NODE_ENV==='production'});
+ }
  if(route==='/api/auth/recovery/access-code'&&req.method==='POST'){
-  const ok=await resetWithAccessCode(await body(req),invalid);
-  return ok?json(res,200,{ok:true}):json(res,400,{error:'The hosting recovery code is invalid, disabled, or already used.'});
+  const token=await resetWithAccessCode(await body(req),invalid);
+  if(!token)return json(res,400,{error:'The hosting recovery code is invalid, disabled, or already used.'});
+  res.setHeader('Set-Cookie',ownerCookie(token));
+  return json(res,200,{ok:true});
  }
  if(['/api/auth/recovery/request','/api/auth/recovery/reset'].includes(route)&&req.method==='POST'){
   const result=await recover(req,route,body,invalid);
@@ -57,7 +63,7 @@ export const server=http.createServer(async(req,res)=>{
  const token=randomBytes(32).toString('hex');await pool.query("DELETE FROM sessions WHERE expires_at<=NOW()");const session=await pool.query(`INSERT INTO sessions
  SELECT $1,NOW()+INTERVAL '7 days' FROM users WHERE id=1 AND password_hash=$2 FOR SHARE`,[digest(token),verifiedHash]);
  if(!session.rowCount)return json(res,401,{error:'Email or password is incorrect.'});
- res.setHeader('Set-Cookie',`relay_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${process.env.NODE_ENV==='production'?'; Secure':''}`);return json(res,200,{ok:true});
+ res.setHeader('Set-Cookie',ownerCookie(token));return json(res,200,{ok:true});
  }
  if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
