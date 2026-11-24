@@ -126,3 +126,11 @@
  .thread-list .thread { padding:8px; }
  .chat-head { flex-wrap:wrap; }
 }
+
+.chat-analysis { border-top:1px solid var(--border); padding:16px 20px; }
+.chat-analysis h2 { margin:0 0 8px; }
+.chat-analysis p, .insight-summary { overflow-wrap:anywhere; }
+.insight-summary { min-width:160px; max-width:520px; white-space:normal; }
+.analysis-tags { display:flex; flex-wrap:wrap; gap:8px; }
+#inbox-channel { min-height:40px; border:1px solid var(--border); border-radius:8px; background:white; padding:8px; }
+#website-chat .shop-chat { max-width:760px; margin-inline:auto; }

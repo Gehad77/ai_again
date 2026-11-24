@@ -1,4 +1,5 @@
 import {createHmac, timingSafeEqual} from 'node:crypto';
+import {queueChat} from './chat-ai.js';
 import {pool} from './db.js';
 
 export const socialConfigured=()=>Boolean(process.env.META_APP_SECRET&&process.env.META_VERIFY_TOKEN);
@@ -19,7 +20,7 @@ function messages(payload){
   }else if(payload.object==='page'||payload.object==='instagram'){
    const channel=payload.object==='page'?'Messenger':'Instagram';
    for(const event of items(entry?.messaging)){
-    if(event?.message?.is_echo||!event?.message)continue;
+    if(event?.message?.is_echo||!event?.message||event.sender?.id===entry.id)continue;
     result.push([channel,entry.id,event.sender?.id,event.message.mid,event.message.text]);
    }
   }
@@ -69,7 +70,9 @@ export async function socialWebhook(req,res,url,json){
     thread={conversation_id:created.rows[0].id};
     await client.query('INSERT INTO social_threads VALUES($1,$2,$3,$4)',[channel,account,sender,thread.conversation_id]);
    }
-   await client.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'customer',$2)",[thread.conversation_id,text.replaceAll('\u0000','').slice(0,4000)]);
+   const message=await client.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'customer',$2) RETURNING id",
+    [thread.conversation_id,text.replaceAll('\u0000','').slice(0,4000)]);
+   await queueChat(client,thread.conversation_id,message.rows[0].id);
    await client.query("UPDATE conversations SET status='Needs reply' WHERE id=$1",[thread.conversation_id]);
   }
   await client.query('COMMIT');

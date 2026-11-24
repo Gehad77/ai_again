@@ -11,6 +11,49 @@ Spending breakdown|تفصيل المصروفات
 Progress toward your targets|التقدم نحو أهدافك
 Covering costs and making a profit|تغطية المصاريف وتحقيق الربح
 Inbox|صندوق الرسائل
+Social and website inbox|رسائل السوشيال والموقع
+Conversation|المحادثة
+No conversations for this channel.|مفيش محادثات للقناة دي.
+Customer insights|تحليل العملاء
+Common topics|أكثر المواضيع تكرارًا
+Insights|تحليل العملاء
+Buyer intent and customer needs across the inbox.|نية الشراء واحتياجات العملاء من المحادثات.
+Analyze existing conversations|تحليل المحادثات السابقة
+Refresh insights|تحديث التحليل
+Configure the AI provider to analyze conversations.|فعّلي مزوّد الذكاء الاصطناعي لتحليل المحادثات.
+No conversations have been analyzed yet.|لسه مفيش محادثات اتحلّلت.
+Analyzed chats|المحادثات المحلّلة
+Buyer intent|نية العميل
+Stage|المرحلة
+Summary|الملخص
+Conversation analysis|تحليل المحادثة
+Needs review|تحتاج مراجعة
+Analysis queued|التحليل في الانتظار
+No analysis yet.|لسه مفيش تحليل.
+Insights refreshed|تم تحديث التحليل
+Buying|شراء
+Pricing|السعر
+Availability|التوفر
+Delivery|التوصيل
+Support|دعم
+New|جديد
+Interested|مهتم
+Ready to buy|جاهز للشراء
+AI replies enabled|الرد الآلي مفعّل
+AI replies disabled|الرد الآلي متوقف
+Open website chat ↗|فتح شات الموقع ↗
+Start a chat|ابدئي محادثة
+Sign in to chat|تسجيل الدخول للمحادثة
+Create chat account|إنشاء حساب للمحادثة
+Already registered? Sign in|عندك حساب؟ سجّلي الدخول
+Messages are stored and may be processed by an AI assistant.|الرسائل بتتحفظ وممكن يعالجها مساعد ذكاء اصطناعي.
+Chat with the store|اتكلمي مع المتجر
+Your message|رسالتك
+Send message|إرسال الرسالة
+AI assistant|مساعد الذكاء الاصطناعي
+Store team|فريق المتجر
+Unable to connect|تعذّر الاتصال
+Please wait a few seconds before sending another message.|استني ثواني قبل إرسال رسالة تانية.
 Customers|العملاء
 Products|المنتجات
 Profile|ملف النشاط

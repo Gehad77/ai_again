@@ -8,7 +8,23 @@ Use **Settings → Workspace preferences** to save the business name, Arabic or 
 
 The owner dashboard reads actual workspace records. The website ordering and signup routes are closed by default, and the hosted dashboard removes the browser demo and static sample activity. Existing records are retained. Demo seeding is available in local development and disabled in production.
 
-To receive texts from Meta, set a Render secret `META_APP_SECRET` from your Meta app and define a strong private `META_VERIFY_TOKEN`. In Meta's product-specific webhook settings, use the address shown under **Integrations**, ending in `/api/social/webhook`, and the same verification token. Connect your WhatsApp Business number, Instagram professional account, or Facebook Page with the applicable permissions, then subscribe it to message events. The inbox shows signed inbound text and keeps the original message language. Integrations shows the first messages once received and reports counts. Outbound messages and media are outside this integration.
+To receive texts from Meta, set a Render secret `META_APP_SECRET` from your Meta app and define a strong private `META_VERIFY_TOKEN`. In Meta's product-specific webhook settings, use the address shown under **Integrations**, ending in `/api/social/webhook`, and the same verification token. Connect your WhatsApp Business number, Instagram professional account, or Facebook Page with the applicable permissions, then subscribe it to message events. The inbox shows signed inbound text and keeps the original message language. **Integrations** shows which channels have received messages. Website visitors can sign up at `/chat` to send private messages. This page does not accept orders.
+
+### AI replies and customer insights
+
+Set `AI_CHAT_ENABLED=1` and `OPENAI_API_KEY` to enable the worker. `OPENAI_CHAT_MODEL` defaults to `gpt-4.1-mini`. The worker uses the OpenAI Responses API for text replies and structured analysis. It uses the recent public-facing catalog for product facts and excludes wholesale costs and other customers' records. Chat text is sent to the AI provider when enabled. Update your customer privacy notices before enabling the feature.
+
+To send social replies, set `META_GRAPH_VERSION` to a version supported by your Meta app and set the appropriate channel tokens:
+
+| Channel | Configuration |
+|---|---|
+| WhatsApp | `META_WHATSAPP_ACCESS_TOKEN` with WhatsApp Business messaging access to the subscribed phone number ID |
+| Instagram | `META_INSTAGRAM_ACCESS_TOKEN` for the professional account connected using Instagram Login and its messaging permission |
+| Messenger | `META_MESSENGER_ACCESS_TOKEN` for the subscribed Facebook Page with messaging permission |
+| Website | Uses the built-in chat at `/chat` and needs no Meta token |
+
+Meta must approve applicable permissions and the channel's messaging rules apply. Test each channel using a real test account after setting secrets. The worker responds only to recent text messages, deduplicates Meta delivery IDs, ignores echoes, and leaves failed jobs for review. **Customer insights → Analyze existing conversations** summarizes previous customer texts without sending replies. Inbound media and voice are outside this integration. Render's free service may sleep when idle.
+
 
 ## Run
 
@@ -34,7 +50,7 @@ The server listens on port 3000 (override with `PORT`). `npm run dev` enables se
 
 ## Prototype boundaries
 
-This is a single-workspace design prototype, not a production SaaS. Sample customers, stock, and messages are available in demo mode. The dashboard's seven-day activity chart is illustrative. Inbox replies persist locally but are not sent externally. Sample AI responses and classifications are seeded; no LLM is connected. Overview cards and analytics read current conversation status.
+This is a single-workspace design prototype, not a production SaaS. Sample customers, stock, and messages are available in demo mode. The dashboard's seven-day activity chart is illustrative. Manual API replies are local records. The optional AI worker sends replies through configured channel APIs and stores conversation analyses. Overview cards and analytics read current conversation status.
 
 Before production: extend owner authentication with account recovery and login rate limits, tenant-scoped authorization and data isolation, secure sessions, rate limits, audit logs, Meta OAuth/webhooks and signature validation, consent and retention controls, real order/payment reconciliation, LLM integration, and subscription billing. Never expose this unauthenticated demo to sensitive customer data. Meta connections require each business's authorization and applicable review. Google Fonts is optional; system fonts work offline.
 

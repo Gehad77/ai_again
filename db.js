@@ -61,6 +61,20 @@ export async function initialize(){
   conversation_id INTEGER UNIQUE NOT NULL REFERENCES conversations(id),
   PRIMARY KEY(channel, account, sender)
  );
+ CREATE TABLE IF NOT EXISTS ai_chat_jobs(
+  conversation_id INTEGER PRIMARY KEY REFERENCES conversations(id),
+  message_id INTEGER NOT NULL REFERENCES messages(id),
+  reply_requested BOOLEAN NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending',
+  claimed_at TIMESTAMPTZ
+ );
+ CREATE INDEX IF NOT EXISTS ai_chat_jobs_state_idx ON ai_chat_jobs(state,message_id);
+ CREATE TABLE IF NOT EXISTS chat_analysis(
+  conversation_id INTEGER PRIMARY KEY REFERENCES conversations(id),
+  analyzed_through INTEGER NOT NULL REFERENCES messages(id),
+  intent TEXT NOT NULL, stage TEXT NOT NULL, summary TEXT NOT NULL, themes JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ );
  CREATE TABLE IF NOT EXISTS social_deliveries(
   channel TEXT NOT NULL, account TEXT NOT NULL, message_id TEXT NOT NULL,
   PRIMARY KEY(channel, account, message_id)

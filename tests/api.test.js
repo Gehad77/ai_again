@@ -90,6 +90,84 @@ test('signed social text reaches the inbox once per message',async()=>{
  }
 });
 
+test('unified inbox analyzes all four channels and sends only one configured reply',async()=>{
+ const env={
+  AI_CHAT_ENABLED:'1',OPENAI_API_KEY:'test-ai-key',
+  META_APP_SECRET:'test-signature-key',META_VERIFY_TOKEN:'test-verification-key',META_GRAPH_VERSION:'v23.0',
+  META_WHATSAPP_ACCESS_TOKEN:'test-wa-token',META_INSTAGRAM_ACCESS_TOKEN:'test-ig-token',
+  META_MESSENGER_ACCESS_TOKEN:'test-fb-token'
+ };
+ Object.assign(process.env,env);
+ const deliveries=[];
+ const inputs=[];
+ globalThis.fetch=async (url,options)=>{
+  const body=JSON.parse(options.body);
+  if(url==='https://api.openai.com/v1/responses'){
+   const input=JSON.parse(body.input);
+   inputs.push(input);
+   assert.equal(body.store,false);
+   assert(!input.catalog.some(item=>'unit_cost' in item));
+   return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({
+    intent:'pricing',stage:'interested',summary:'Asked for a price.',themes:['price'],
+    reply:input.replyRequested?'Thanks for your message.':''
+   })}]}]});
+  }
+  assert.match(url,/^https:\/\/graph\.(?:facebook|instagram)\.com\/v23\.0\//);
+  deliveries.push({url,body});
+  return Response.json({message_id:'accepted'});
+ };
+ try{
+  const request=(path,data,cookie)=>rawFetch(base+'/api/website/'+path,{
+   method:data?'POST':'GET',headers:cookie?{cookie}:{},...(data?{body:JSON.stringify(data)}:{})
+  });
+  assert.equal((await rawFetch(base+'/chat')).status,200);
+  assert.equal((await request('chat')).status,401);
+  assert.equal((await rawFetch(base+'/api/chats/analyze',{method:'POST'})).status,401);
+  const signup=await request('signup',{name:'Website AI customer',email:'ai-buyer@example.com',password:'website-chat-password'});
+  assert.equal(signup.status,200);
+  const websiteCookie=signup.headers.get('set-cookie').split(';')[0];
+  assert.equal((await request('chat',{body:'How much is the product?'},websiteCookie)).status,201);
+  assert.equal((await request('chat',{body:'Repeated too soon'},websiteCookie)).status,429);
+
+  const shapes=[
+   {object:'whatsapp_business_account',entry:[{changes:[{field:'messages',value:{
+    metadata:{phone_number_id:'802'},messages:[{type:'text',id:'wamid.42',from:'902',text:{body:'WhatsApp pricing?'}}]
+   }}]}]},
+   {object:'instagram',entry:[{id:'803',messaging:[{sender:{id:'903'},message:{mid:'ig-42',text:'Instagram pricing?'}}]}]},
+   {object:'page',entry:[{id:'804',messaging:[{sender:{id:'904'},message:{mid:'fb-42',text:'Messenger pricing?'}}]}]}
+  ];
+  for(const payload of shapes){
+   const body=JSON.stringify(payload);
+   const signature='sha256='+createHmac('sha256',env.META_APP_SECRET).update(body).digest('hex');
+   for(let count=0;count<2;count++){
+    const response=await rawFetch(base+'/api/social/webhook',{method:'POST',body,headers:{'x-hub-signature-256':signature}});
+    assert.equal(response.status,200);
+   }
+  }
+  assert.equal((await fetch(base+'/api/chats/analyze',{method:'POST'})).status,202);
+  const {processChatJob}=await import('../chat-ai.js');
+  for(let attempt=0;attempt<30;attempt++){if(!await processChatJob())break;}
+  const website=await (await request('chat',null,websiteCookie)).json();
+  assert.equal(website.messages.filter(message=>message.body==='Thanks for your message.').length,1);
+  assert.equal((await request('products',null,websiteCookie)).status,401);
+  assert.equal((await rawFetch(base+'/api/shop/orders',{method:'POST',body:'{}'})).status,410);
+  const data=await (await fetch(base+'/api/overview')).json();
+  assert.equal(data.aiConfigured,true);
+  for(const channel of ['Website','WhatsApp','Instagram','Messenger']){
+   const id=data.conversations.find(c=>c.channel===channel&&c.id>=1000).id;
+   assert(data.chatAnalysis.some(row=>row.conversation_id===id&&row.intent==='pricing'));
+  }
+  assert(deliveries.some(entry=>entry.url.includes('/802/')&&entry.body.to==='902'));
+  assert(deliveries.some(entry=>entry.url.includes('instagram.com/v23.0/803/')&&entry.body.recipient.id==='903'));
+  assert(deliveries.some(entry=>entry.url.includes('/804/')&&entry.body.messaging_type==='RESPONSE'));
+  for(const account of ['802','803','804'])assert.equal(deliveries.filter(entry=>entry.url.includes('/'+account+'/')).length,1);
+  assert(inputs.some(input=>input.replyRequested===false&&input.messages.some(message=>message.role==='customer')));
+ }finally{
+  globalThis.fetch=rawFetch;
+  for(const key of Object.keys(env))delete process.env[key];
+ }
+});
+
 test('customer chat orders are private, priced by server, and confirmed once',async t=>{
  process.env.ENABLE_LEGACY_SHOP='1';
  t.after(()=>{delete process.env.ENABLE_LEGACY_SHOP;});

@@ -3,7 +3,7 @@ import { businessDate, currencies, defaultReportPeriod, isInPeriod, timeZones } 
 import { bindPricingCalculator, bindSalesTargets, businessProfile, expensePage, stockDialog, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
 const staticSite=location.hostname.endsWith('github.io');
-const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',analytics:'▥',integrations:'⌘',settings:'⚙'};
+const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',analytics:'▥',integrations:'⌘',insights:'▥',settings:'⚙'};
 let state={page:location.hash==='#expenses'||location.hash==='#business-expense'?'expenses':location.hash==='#settings'?'settings':['#profile','#business-warehouse','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
 const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const api=async(url,options)=>{const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error);return d;};
@@ -19,14 +19,16 @@ function customers(){return `<div class="heading"><div class="eyebrow">PEOPLE, N
 const money=formatMoney;
 function analytics(){const a=analyze(state.data,{days:state.analyticsDays||0,channel:state.analyticsChannel||'All channels'});const total=a.orders.length;return `<div class="heading"><div class="eyebrow">SALES & INVENTORY INTELLIGENCE</div><h1>Know what sells. Know what’s left.</h1><p>Sales totals use paid orders only. Stock shows current inventory across all channels.</p></div><button class="primary create-action" data-go="inbox">Create orders from inbox ↗</button><div class="analytics-toolbar"><div><label>Sales period <select id="analytics-period"><option value="0">All time</option><option value="7" ${state.analyticsDays===7?'selected':''}>Last 7 days</option><option value="30" ${state.analyticsDays===30?'selected':''}>Last 30 days</option></select></label><label>Channel <select id="analytics-channel">${['All channels','WhatsApp','Instagram','Messenger','Website'].map(c=>`<option ${c===state.analyticsChannel?'selected':''}>${c}</option>`).join('')}</select></label></div><button id="analytics-export">Download product report ↓</button></div><div class="metrics">${[['Units sold',a.units,'Paid quantities in the selected period'],['Products left',a.stock,'Current units available in the store'],['Sales revenue',money(a.revenue),'Paid item totals · excludes tax and shipping'],['Gross profit',money(a.profit),'Revenue minus recorded product costs'],['Paid orders',a.paid.length,'Order records, not chat status'],['Average order',money(a.averageOrder),'Paid revenue divided by paid orders'],['Stock retail value',money(a.stockValue),'Current stock × catalog selling price'],['Low-stock products',a.lowStock.length,'At or below the configured stock threshold']].map(([label,n,sub])=>`<article class="metric"><div>${label}</div><strong>${n}</strong><small>${sub}</small></article>`).join('')}</div><section class="card recent"><div class="card-head"><div><h2>Product performance & stock</h2><p>Inquiries cover all conversation history for the selected channel; sales follow the selected period.</p></div></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Price</th><th>Stock left</th><th>Units sold</th><th>Revenue</th><th>Gross profit</th><th>Inquiries</th><th>Inactive chats</th><th>Price concerns</th></tr></thead><tbody>${a.products.map(p=>`<tr><td><b>${esc(p.name)}</b><small>${esc(p.category)}</small></td><td>${money(p.price)}</td><td>${badge(p.stock+' left')}${p.stock<=(state.data.settings.low_stock_threshold)?' <span class="badge amber">Restock</span>':''}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${money(p.profit)}</td><td>${p.inquiries}</td><td>${p.inactive}</td><td>${p.priceConcerns}</td></tr>`).join('')}</tbody></table></div></section><div class="chart-grid analytics-section"><section class="card"><div class="card-head"><div><h2>Sales by channel</h2><p>Paid order revenue in your selected filters</p></div></div>${['WhatsApp','Instagram','Messenger','Website'].map(c=>{const os=a.paid.filter(o=>o.channel===c);const r=os.reduce((s,o)=>s+o.quantity*o.unit_price,0);return `<div class="demand"><span>${channel(c)}${c}<small>${os.length} paid orders</small></span><div><i style="width:${a.revenue?r/a.revenue*100:0}%"></i></div><b>${money(r)}</b></div>`;}).join('')}</section><section class="card"><div class="card-head"><div><h2>Inventory watchlist</h2><p>Current inventory · all channels</p></div></div>${a.lowStock.length?a.lowStock.map(p=>`<div class="stock-alert"><span class="insight-icon peach">!</span><div><b>${esc(p.name)}</b><p>${p.stock} units left. Review stock before your next promotion.</p></div>${badge('Low stock')}</div>`).join(''):'<p class="stock-alert">All products are above the low-stock threshold.</p>'}<div class="insight-foot">Retail stock value is not inventory cost or realized revenue.</div></section></div><div class="analytics-grid">${[['Pending orders',a.pending,'Awaiting payment; excluded from sales.'],['Refunded orders',a.refunded,'Excluded from paid totals; refund cash flow is not modeled.'],['Cancelled orders',a.cancelled,'Excluded from sales and revenue.']].map(([t,n,d])=>`<article class="card analytics-card"><h2>${t}</h2><strong>${n}</strong><p>${d}</p></article>`).join('')}</div><section class="card recent analytics-section"><div class="card-head"><div><h2>Order ledger <span class="count">${total}</span></h2><p>Trace every sales total back to an order record.</p></div></div><div class="table-wrap"><table><thead><tr><th>Order</th><th>Date</th><th>Product</th><th>Channel</th><th>Quantity</th><th>Item total</th><th>Status</th></tr></thead><tbody>${a.orders.map(o=>`<tr><td>#RL-${String(o.id).padStart(4,'0')}</td><td>${esc(businessDate(o.paid_at??o.date,state.data.settings?.time_zone))}</td><td>${esc(state.data.products.find(p=>p.id===o.product_id)?.name||'Unknown product')}</td><td>${channel(o.channel)}${o.channel}</td><td>${o.quantity}</td><td>${money(o.quantity*o.unit_price)}</td><td>${badge(o.status)}</td></tr>`).join('')||'<tr><td colspan="7">No orders in the selected period and channel.</td></tr>'}</tbody></table></div></section><div class="notice">Changing a chat to “Converted” does not create an order or reduce stock. Gross profit excludes operating expenses. Inactive chats have an unknown outcome, not a confirmed lost sale.</div>`;}
 function integrations(){
- const {socialConfigured, socialActivity=[]}=state.data;
+ const {socialConfigured, socialActivity=[],aiConfigured,replyChannels=[]}=state.data;
  return `<div class="heading"><h1>Social accounts</h1><p>Text messages appear in the inbox after the Meta account is connected.</p></div>
  <div class="analytics-grid">${['WhatsApp','Instagram','Messenger'].map(c=>{
  const activity=socialActivity.find(row=>row.channel===c);
  return `<article class="card integration">${channel(c)}<h2>${c}</h2>
- ${badge(!socialConfigured?'Setup required':activity?'Receiving messages':'Waiting for first message')}
+ ${badge(!socialConfigured?'Setup required':activity?'Receiving messages':'Waiting for first message')} ${badge(replyChannels.includes(c)?'AI replies enabled':'AI replies disabled')}
  <dl><dt>Text messages</dt><dd>${activity?.messages??0}</dd><dt>Conversation threads</dt><dd>${activity?.conversations??0}</dd></dl></article>`;
- }).join('')}</div>
+ }).join('')}<article class="card integration"><h2>Website</h2>${badge(aiConfigured?'AI replies enabled':'AI replies disabled')}
+ <dl><dt>Conversation threads</dt><dd>${state.data.conversations.filter(c=>c.channel==='Website').length}</dd></dl>
+ <a href="/chat" target="_blank" rel="noopener">Open website chat ↗</a></article></div>
  <section class="card settings"><h2>Webhook address</h2>
  <div class="webhook-address"><code id="webhook-address" dir="ltr" data-user-content>${esc(location.origin)}/api/social/webhook</code>
  <button id="copy-webhook" type="button">Copy address</button></div>
@@ -48,16 +50,123 @@ function settings(){
  <small>Existing amounts retain their numbers and are shown in the selected currency. No exchange-rate conversion is applied.</small></p>
  <button class="primary">Save settings</button><p role="alert" class="form-error"></p></form></section>`;
 }
-async function inbox(){const c=state.data.conversations.find(x=>x.id===state.selected)||state.data.conversations[0];if(!c){$('#page').innerHTML='<div class="heading"><h1>Your inbox is ready.</h1><p>Connect a social account to receive messages here.</p><div class="top-actions"><button class="primary" data-go="integrations">Social accounts</button><button id="refresh-inbox">Refresh inbox</button></div></div>';$('#refresh-inbox').onclick=async()=>{state.data=await api('/api/overview');await inbox();};return;}state.selected=c.id;const messages=await api(`/api/conversations/${c.id}`);if(state.page!=='inbox'||state.selected!==c.id)return;$('#page').innerHTML=`<div class="heading"><h1>Social inbox</h1><p>Incoming text messages from connected accounts.</p></div><div class="top-actions"><button id="refresh-inbox">Refresh inbox</button><button class="primary" data-create="order">+ Create order from chat</button></div><div class="inbox-layout card"><aside class="threads" aria-labelledby="threads-title"><h2 id="threads-title">Conversations</h2><div class="thread-list">${state.data.conversations.map(x=>`<button data-chat="${x.id}" class="thread ${x.id===c.id?'selected':''}" ${x.id===c.id?'aria-current="true"':''}><span class="avatar" style="background:${x.color}">${esc(x.initials)}</span><span><b data-user-content>${esc(x.name)}</b><small><span>${esc(x.channel)}</span> · <span>${esc(x.status)}</span></small></span></button>`).join('')}</div></aside><div class="chat"><div class="chat-head"><div class="person"><span class="avatar" style="background:${c.color}">${esc(c.initials)}</span><div><b data-user-content>${esc(c.name)}</b><small><span>${esc(c.channel)}</span>${c.product?` · <span data-user-content>${esc(c.product)}</span>`:''}</small></div></div><select id="status" aria-label="Conversation status">${['Needs reply','AI handling','Converted','Inactive'].map(s=>`<option ${s===c.status?'selected':''}>${s}</option>`).join('')}</select></div><div class="messages"> <div class="chat-date">CONVERSATION</div>${messages.map(m=>`<div class="bubble ${m.role==='customer'?'incoming':'outgoing'}"><small>${m.role==='customer'?esc(c.name):m.role==='agent'?'You':'Order assistant'}</small><div data-user-content dir="auto">${esc(m.body)}</div></div>`).join('')}</div><div class="inbox-orders">${(state.data.orders||[]).filter(o=>o.conversation_id===c.id).map(o=>`<div>Order #${o.id} · ${o.quantity} items · ${money(o.quantity*o.unit_price)} · ${esc(o.status)} ${o.status==='Pending'?`<button data-confirm-order="${o.id}" class="primary">Confirm payment</button>`:''}</div>`).join('')}</div></div></div>`;if(state.focusThread===c.id){$('.threads [aria-current="true"]').focus({preventScroll:true});state.focusThread=null;}$('#refresh-inbox').onclick=async()=>{try{state.data=await api('/api/overview');await inbox();}catch(e){toast(e.message);}};$('#status').onchange=async e=>{try{await api(`/api/conversations/${c.id}`,{method:'PATCH',body:JSON.stringify({status:e.target.value})});state.data=await api('/api/overview');toast('Conversation updated');}catch(e){toast(e.message);}};}
+const chatChannels=['WhatsApp','Instagram','Messenger','Website'];
+const allChatChannels=['All channels',...chatChannels];
+const analysisTerms={
+ buying:'Buying',pricing:'Pricing',availability:'Availability',delivery:'Delivery',support:'Support',other:'Other',
+ new:'New',interested:'Interested',ready:'Ready to buy'
+};
+const analysisLabel=value=>analysisTerms[value]??value;
+
+function chatAnalysisCard(id){
+ const analysis=state.data.chatAnalysis?.find(row=>row.conversation_id===id);
+ const job=state.data.chatJobs?.find(row=>row.conversation_id===id);
+ const status=!state.data.aiConfigured?'':job?.state==='failed'?'Needs review':['pending','working'].includes(job?.state)?'Analysis queued':'';
+ return `<section class="chat-analysis"><h2>Conversation analysis</h2>
+ ${status?`<p>${status}</p>`:''}
+ ${analysis?`<div class="analysis-tags">${badge(analysisLabel(analysis.intent))}${badge(analysisLabel(analysis.stage))}</div>
+ <p data-user-content dir="auto">${esc(analysis.summary)}</p>
+ ${analysis.themes?.length?`<ul>${analysis.themes.map(theme=>`<li data-user-content dir="auto">${esc(theme)}</li>`).join('')}</ul>`:''}`:'<p>No analysis yet.</p>'}</section>`;
+}
+
+function customerAnalytics(){
+ const rows=state.data.chatAnalysis??[];
+ const counts=new Map();
+ const topics=new Map();
+ for(const row of rows){
+  counts.set(row.intent,(counts.get(row.intent)??0)+1);
+  const unique=new Set((row.themes??[]).map(theme=>theme.trim().toLowerCase()).filter(Boolean));
+  for(const topic of unique)topics.set(topic,(topics.get(topic)??0)+1);
+ }
+ const topTopics=[...topics].sort((a,b)=>b[1]-a[1]).slice(0,8);
+ const byId=new Map(state.data.conversations.map(c=>[c.id,c]));
+ return `<div class="heading"><h1>Customer insights</h1><p>Buyer intent and customer needs across the inbox.</p></div>
+ <div class="top-actions"><button id="analyze-history" class="primary" ${state.data.aiConfigured?'':'disabled'}>Analyze existing conversations</button>
+ <button id="refresh-insights">Refresh insights</button></div>
+ ${state.data.aiConfigured?'':'<p class="notice">Configure the AI provider to analyze conversations.</p>'}
+ <div class="metrics">${[['Analyzed chats',rows.length],['Ready to buy',rows.filter(row=>row.stage==='ready').length],...counts]
+ .map(([label,value])=>`<article class="metric"><div>${esc(analysisLabel(label))}</div><strong>${value}</strong></article>`).join('')}</div>
+ ${topTopics.length?`<section class="card recent"><div class="card-head"><h2>Common topics</h2></div>
+ <ul class="chat-analysis">${topTopics.map(([topic,count])=>`<li><span data-user-content dir="auto">${esc(topic)}</span> · ${count}</li>`).join('')}</ul></section>`:''}
+ <section class="card"><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Channel</th><th>Buyer intent</th><th>Stage</th><th>Summary</th><th></th></tr></thead><tbody>
+ ${[...rows].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).map(row=>{
+ const c=byId.get(row.conversation_id);
+ if(!c)return '';
+ return `<tr><td data-user-content>${esc(c.name)}</td><td>${esc(c.channel)}</td><td>${esc(analysisLabel(row.intent))}</td>
+ <td>${esc(analysisLabel(row.stage))}</td><td class="insight-summary" data-user-content dir="auto">${esc(row.summary)}</td>
+ <td><button data-chat="${c.id}">Open chat</button></td></tr>`;
+ }).join('')||'<tr><td colspan="6">No conversations have been analyzed yet.</td></tr>'}
+ </tbody></table></div></section>`;
+}
+
+async function inbox(){
+ const selectedChannel=state.inboxChannel??'All channels';
+ const conversations=state.data.conversations.filter(c=>selectedChannel==='All channels'||c.channel===selectedChannel);
+ const c=conversations.find(x=>x.id===state.selected)||conversations[0];
+ const shell=`<div class="heading"><h1>Social and website inbox</h1><p>Incoming text messages from connected accounts.</p></div>
+ <div class="top-actions"><label>Channel <select id="inbox-channel">${allChatChannels.map(name=>`<option value="${name}" ${name===selectedChannel?'selected':''}>${name}</option>`).join('')}</select></label>
+ <button id="refresh-inbox">Refresh inbox</button>
+ ${c?'<button class="primary" data-create="order">+ Create order from chat</button>':'<button data-go="integrations">Social accounts</button>'}</div>`;
+ const bindControls=()=>{
+  $('#inbox-channel').onchange=e=>{state.inboxChannel=e.target.value;void inbox().catch(e=>toast(e.message));};
+  $('#refresh-inbox').onclick=()=>refreshInbox(true);
+ };
+ if(!c){
+  $('#page').innerHTML=shell+'<p class="notice">No conversations for this channel.</p>';
+  bindControls();
+  return;
+ }
+ state.selected=c.id;
+ const messages=await api(`/api/conversations/${c.id}`);
+ if(state.page!=='inbox'||state.selected!==c.id||(state.inboxChannel??'All channels')!==selectedChannel)return;
+ $('#page').innerHTML=shell+`<div class="inbox-layout card">
+ <aside class="threads" aria-labelledby="threads-title"><h2 id="threads-title">Conversations</h2><div class="thread-list">
+ ${conversations.map(x=>`<button data-chat="${x.id}" class="thread ${x.id===c.id?'selected':''}" ${x.id===c.id?'aria-current="true"':''}>
+ <span class="avatar" style="background:${x.color}">${esc(x.initials)}</span><span><b data-user-content>${esc(x.name)}</b>
+ <small><span>${esc(x.channel)}</span> · <span>${esc(x.status)}</span></small></span></button>`).join('')}</div></aside>
+ <div class="chat"><div class="chat-head"><div class="person"><span class="avatar" style="background:${c.color}">${esc(c.initials)}</span>
+ <div><b data-user-content>${esc(c.name)}</b><small><span>${esc(c.channel)}</span>${c.product?` · <span data-user-content>${esc(c.product)}</span>`:''}</small></div></div>
+ <select id="status" aria-label="Conversation status">${['Needs reply','AI handling','Converted','Inactive'].map(s=>`<option value="${s}" ${s===c.status?'selected':''}>${s}</option>`).join('')}</select></div>
+ <div class="messages" aria-label="Conversation"><div class="chat-date">CONVERSATION</div>
+ ${messages.map(m=>`<div class="bubble ${m.role==='customer'?'incoming':'outgoing'}">
+ <small>${m.role==='customer'?esc(c.name):m.role==='agent'?'You':'AI assistant'}</small>
+ <div data-user-content dir="auto">${esc(m.body)}</div></div>`).join('')}</div>
+ ${chatAnalysisCard(c.id)}
+ <div class="inbox-orders">${(state.data.orders??[]).filter(o=>o.conversation_id===c.id).map(o=>`<div>Order #${o.id} · ${o.quantity} · ${money(o.quantity*o.unit_price)} · ${esc(o.status)}
+ ${o.status==='Pending'?`<button data-confirm-order="${o.id}" class="primary">Confirm payment</button>`:''}</div>`).join('')}</div></div></div>`;
+ if(state.focusThread===c.id){$('.threads [aria-current="true"]').focus({preventScroll:true});state.focusThread=null;}
+ bindControls();
+ $('#status').onchange=async e=>{
+  try{await api(`/api/conversations/${c.id}`,{method:'PATCH',body:JSON.stringify({status:e.target.value})});state.data=await api('/api/overview');toast('Conversation updated');}
+  catch(e){toast(e.message);}
+ };
+}
+let refreshingInbox=false;
+async function refreshInbox(manual=false){
+ if(refreshingInbox||state.page!=='inbox'||!state.data)return;
+ refreshingInbox=true;
+ try{
+  const next=await api('/api/overview');
+  if(state.page!=='inbox'||!state.data)return;
+  const tracked=data=>JSON.stringify([data.conversations,data.orders,data.chatJobs,data.chatAnalysis]);
+  if(manual||tracked(next)!==tracked(state.data)){
+   state.data=next;
+   const active=document.activeElement;
+   if(active?.matches('.thread'))state.focusThread=Number(active.dataset.chat);
+   await inbox();
+  }
+ }catch(error){if(manual)toast(error.message);}
+ finally{refreshingInbox=false;}
+}
 const navigationGroups = [
  ['Dashboard', ['overview']],
  ['Store operations', ['products','profile','expenses','analytics']],
- ['Customer channels', ['inbox','customers','integrations']],
+ ['Customer channels', ['inbox','customers','insights','integrations']],
  ['Workspace administration', ['settings']]
 ];
 
 function navigation(){
- const labels={profile:'Business profile',integrations:'Social accounts'};
+ const labels={profile:'Business profile',integrations:'Social accounts',insights:'Customer insights'};
  return navigationGroups.map(([label,pages])=>`<section class="nav-group">
  ${pages[0]==='overview'?'':`<h2>${label}</h2>`}
  ${pages.map(page=>`<button type="button" data-go="${page}" class="nav-item ${state.page===page?'active':''}"
@@ -80,12 +189,22 @@ function render(){
  <div class="main">
   <header><div class="page-path"><span class="breadcrumb" data-user-content>${esc(state.data.workspace)}</span><span class="slash">/</span>${state.page[0].toUpperCase()+state.page.slice(1)}</div>
    <div class="header-right"><button id="signout">Sign out</button></div></header>
-  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='settings'?settings():''}</main>
+  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():''}</main>
  </div>`;
  if(state.page==='inbox')inbox().catch(e=>toast(e.message));
  bind();
 }
 function bind(){
+const analyzeHistory=$('#analyze-history');
+if(analyzeHistory)analyzeHistory.onclick=async()=>{
+ analyzeHistory.disabled=true;
+ try{
+  await api('/api/chats/analyze',{method:'POST'});
+  await refreshBusiness('Analysis queued');
+ }catch(error){toast(error.message);analyzeHistory.disabled=false;}
+};
+const refreshInsights=$('#refresh-insights');
+if(refreshInsights)refreshInsights.onclick=()=>refreshBusiness('Insights refreshed');
 const navToggle=$('#nav-toggle');
 navToggle.onclick=()=>{navToggle.setAttribute('aria-expanded',String(navToggle.getAttribute('aria-expanded')!=='true'));};
 const copyWebhook=$('#copy-webhook');
@@ -160,7 +279,7 @@ document.addEventListener('click',e=>{const jump=e.target.closest('[data-section
 const edit=e.target.closest('[data-edit-product]');
 if(edit)openCreate('product',state.data.products.find(p=>p.id===Number(edit.dataset.editProduct)));
 const stock=e.target.closest('[data-stock-product]');
-if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.jump)jumpToSection(go.dataset.jump);else focusPage();}if(chat){state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);state.focusThread=chat.matches('.thread')?state.selected:null;render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
+if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.jump)jumpToSection(go.dataset.jump);else focusPage();}if(chat){if(!chat.matches('.thread'))state.inboxChannel='All channels';state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);state.focusThread=chat.matches('.thread')?state.selected:null;render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('tr[data-chat]'))e.target.click();});
 
 async function loadCustomerAccounts(){
@@ -406,3 +525,5 @@ new MutationObserver(records=>{
  for(const record of records)for(const node of record.addedNodes)localize(node);
 }).observe(document.body,{childList:true,subtree:true});
 await boot();
+
+setInterval(()=>{if(!document.hidden&&state.page==='inbox'&&document.activeElement?.tagName!=='SELECT')void refreshInbox();},8000);

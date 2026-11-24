@@ -1,3 +1,4 @@
+import {aiConfigured,queueHistory,replyChannels,startChatWorker} from './chat-ai.js';
 import {socialConfigured,socialWebhook} from './social.js';
 import {currencies,defaultSettings,timeZones} from './public/business-model.js';
 import { adminRecoveryStatus, resetWithAccessCode } from './owner-access-code.js';
@@ -17,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.dirname(fileURLToPath(import.meta.url));
 await initialize();
+const stopChatWorker=process.env.NODE_ENV==='test'?()=>{}:startChatWorker();
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
 const ownerCookie=token=>`relay_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${process.env.NODE_ENV==='production'?'; Secure':''}`;
 export const server=http.createServer(async(req,res)=>{
@@ -27,6 +29,9 @@ export const server=http.createServer(async(req,res)=>{
  res.setHeader('Cache-Control','no-store');
  if(!['GET','HEAD'].includes(req.method)&&req.headers.origin&&req.headers.origin!==`http://${req.headers.host}`&&req.headers.origin!==`https://${req.headers.host}`)return json(res,403,{error:'Invalid request origin'});
  if(route.startsWith('/api/shop/')&&process.env.ENABLE_LEGACY_SHOP!=='1')return json(res,410,{error:'Website ordering is closed.'});
+ if(/^\/api\/website\/(session|signup|signin|signout|chat)$/.test(route)){
+  if(await customerRoutes(req,res,route.replace('/api/website/','/api/shop/'),{pool,body,invalid,json,scrypt,digest,randomBytes,timingSafeEqual,websiteChat:true}))return;
+ }
  if(await customerRoutes(req,res,route,{pool,body,invalid,json,scrypt,digest,randomBytes,timingSafeEqual}))return;
  const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('relay_session='))?.slice(14)||'';
  const signedIn=!!(await pool.query('SELECT token FROM sessions WHERE token=$1 AND expires_at>NOW()',[digest(cookie)])).rowCount;
@@ -71,6 +76,10 @@ export const server=http.createServer(async(req,res)=>{
  }
  if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
+ }
+ if(route==='/api/chats/analyze'&&req.method==='POST'){
+  if(!aiConfigured())return json(res,503,{error:'Configure AI chat before analyzing conversations.'});
+  return json(res,202,{queued:await queueHistory()});
  }
  if(route==='/api/settings'&&req.method==='PUT'){
   const p=await body(req);
@@ -130,8 +139,11 @@ export const server=http.createServer(async(req,res)=>{
     SELECT t.channel, COUNT(DISTINCT t.conversation_id)::int AS conversations, COUNT(m.id)::int AS messages
     FROM social_threads t LEFT JOIN messages m ON m.conversation_id=t.conversation_id AND m.role='customer'
     GROUP BY t.channel
-   ) channels),'[]') AS "socialActivity"`);
-  return json(res,200,{...data,settings:data.settings??defaultSettings,workspace:data.settings?.name??defaultSettings.name,demo:process.env.SEED_DEMO==='1',socialConfigured:socialConfigured()});
+   ) channels),'[]') AS "socialActivity",
+   COALESCE((SELECT json_agg(a) FROM chat_analysis a),'[]') AS "chatAnalysis",
+   COALESCE((SELECT json_agg(j) FROM (SELECT conversation_id,state FROM ai_chat_jobs) j),'[]') AS "chatJobs"
+   `);
+  return json(res,200,{...data,settings:data.settings??defaultSettings,workspace:data.settings?.name??defaultSettings.name,demo:process.env.SEED_DEMO==='1',socialConfigured:socialConfigured(),aiConfigured:aiConfigured(),replyChannels:aiConfigured()?replyChannels():[]});
  }
  if(route.match(/^\/api\/orders\/\d+\/confirm$/)&&req.method==='POST'){
  const id=Number(route.split('/')[3]);const p=await body(req);if(typeof p.unit_cost!=='number'||!Number.isFinite(p.unit_cost)||p.unit_cost<0||p.unit_cost>9999999999.99)invalid('Enter a valid unit cost.');
@@ -148,10 +160,10 @@ export const server=http.createServer(async(req,res)=>{
   res.writeHead(410,{'Content-Type':'text/plain; charset=utf-8'});
   return res.end('Website ordering is closed. / الطلبات من الموقع متوقفة.');
  }
- const files={'/i18n.js':'i18n.js','/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
+ const files={'/chat':'website-chat.html','/chat/':'website-chat.html','/website-chat.js':'website-chat.js','/i18n.js':'i18n.js','/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
  }catch(e){console.error('Request failed:',e.code||e.name);json(res,e.status||500,{error:e.status?e.message:'Something went wrong'});}
 });
 if(process.env.NODE_ENV!=='test')server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('Relay CRM listening on port '+(process.env.PORT||3000)));
 
-export async function close(){await new Promise(resolve=>server.close(resolve));await pool.end();}
+export async function close(){stopChatWorker();await new Promise(resolve=>server.close(resolve));await pool.end();}
 if(process.env.NODE_ENV!=='test'){for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>close().then(()=>process.exit(0)));}
