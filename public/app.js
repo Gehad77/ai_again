@@ -3,11 +3,12 @@ import { currency, formatMoney, language, localize, locale, setCurrency, setLang
 import { businessDate, currencies, defaultReportPeriod, expenseCategoryName, financeCsv, financials, isIncomeTaxCategory, isInPeriod, isLowStock, reviewExpenses, stockAlertThreshold, timeZones } from './business-model.js';
 import { bindPricingCalculator, bindSalesTargets, bindWarehouseFilters, businessProfile, cashPage, expensePage, pricingPage, stockDialog, taxPage, todayActions, warehousePage, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
+const workspacePath=location.pathname.match(/^\/w\/[^/]+/)?.[0]??'';
 const staticSite=location.hostname.endsWith('github.io');
-const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',cash:'↔',pricing:'≈',warehouse:'▧',analytics:'▥',integrations:'⌘',insights:'▥',taxes:'◇',guide:'?',settings:'⚙'};
-let state={page:location.hash==='#expenses'||location.hash==='#business-expense'?'expenses':['#settings','#taxes','#guide','#pricing','#warehouse','#cash'].includes(location.hash)?location.hash.slice(1):location.hash==='#business-warehouse'?'warehouse':['#profile','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
+const icons={overview:'◫',inbox:'▤',customers:'♧',products:'◇',profile:'▧',expenses:'▤',orders:'▤',cash:'↔',pricing:'≈',warehouse:'▧',analytics:'▥',integrations:'⌘',insights:'▥',taxes:'◇',guide:'?',settings:'⚙'};
+let state={page:location.hash==='#expenses'||location.hash==='#business-expense'?'expenses':['#settings','#taxes','#guide','#pricing','#warehouse','#cash','#orders'].includes(location.hash)?location.hash.slice(1):location.hash==='#business-warehouse'?'warehouse':['#profile','#business-target'].includes(location.hash)?'profile':'overview',filter:'All channels',search:'',selected:1,data:null,businessYear:businessDate().slice(0,4),businessPeriod:businessDate().slice(0,7)};
 const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const api=async(url,options)=>{const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error);return d;};
+const api=async(url,options)=>{const r=await fetch(workspacePath+url,options);const d=await r.json();if(!r.ok)throw Error(d.error);return d;};
 const toast=t=>{$('#toast').textContent=translate(t);$('#toast').classList.add('show');setTimeout(()=>$('#toast').classList.remove('show'),3000);};
 const channel=c=>`<span class="channel ${c.toLowerCase()}">${c==='WhatsApp'?'◉':c==='Instagram'?'◎':'ϟ'}</span>`;
 const badge=s=>`<span class="badge ${s==='High intent'||s==='Converted'||s==='Purchased'?'green':s==='Needs reply'||s==='Price concern'?'amber':'gray'}">${esc(s)}</span>`;
@@ -29,7 +30,7 @@ function integrations(){
  <dl><dt>Text messages</dt><dd>${activity?.messages??0}</dd><dt>Conversation threads</dt><dd>${activity?.conversations??0}</dd></dl></article>`;
  }).join('')}<article class="card integration"><h2>Website</h2>${badge(aiConfigured?'AI replies enabled':'AI replies disabled')}
  <dl><dt>Conversation threads</dt><dd>${state.data.conversations.filter(c=>c.channel==='Website').length}</dd></dl>
- <a href="/chat" target="_blank" rel="noopener">Open website chat ↗</a></article></div>
+ <a href="${workspacePath?workspacePath+'/shop':'/chat'}" target="_blank" rel="noopener">Open website chat ↗</a></article></div>
  <section class="card settings"><h2>Webhook address</h2>
  <div class="webhook-address"><code id="webhook-address" dir="ltr" data-user-content>${esc(location.origin)}/api/social/webhook</code>
  <button id="copy-webhook" type="button">Copy address</button></div>
@@ -49,7 +50,11 @@ function settings(){
  <label>Low-stock alert threshold<input name="low_stock_threshold" type="number" value="${prefs.low_stock_threshold}" min="0" max="2147483647" step="1" required></label>
  <p id="currency-change-note" hidden><label><span><input name="confirm" type="checkbox"> I confirm the currency applies to existing records.</span></label>
  <small>Existing amounts retain their numbers and are shown in the selected currency. No exchange-rate conversion is applied.</small></p>
- <button class="primary">Save settings</button><p role="alert" class="form-error"></p></form></section>`;
+ <button class="primary">Save settings</button><p role="alert" class="form-error"></p></form></section>
+ <section class="card recent settings"><h2>Assistant information</h2>
+ <p>Add shipping, payments, returns and approved answers for this store. Use public business information only.</p>
+ <form id="assistant-settings" class="business-form"><label>Store policies<textarea name="notes" maxlength="5000" rows="6">${esc(prefs.assistant_notes??'')}</textarea></label>
+ <button type="submit" class="primary">Save assistant information</button><p class="form-error" role="alert"></p></form></section>`;
 }
 const chatChannels=['WhatsApp','Instagram','Messenger','Website'];
 const allChatChannels=['All channels',...chatChannels];
@@ -75,6 +80,25 @@ function chatAnalysisCard(id,channel){
  ${analysis?`<div class="analysis-tags">${badge(analysisLabel(analysis.intent))}${badge(analysisLabel(analysis.stage))}</div>
  <p data-user-content dir="auto">${esc(analysis.summary)}</p>
  ${analysis.themes?.length?`<ul>${analysis.themes.map(theme=>`<li data-user-content dir="auto">${esc(theme)}</li>`).join('')}</ul>`:''}`:'<p>No analysis yet.</p>'}</section>`;
+}
+
+function ordersPage(){
+ const customers=new Map(state.data.conversations.map(c=>[c.id,c.name]));
+ const productsById=new Map(state.data.products.map(p=>[p.id,p.name]));
+ const orders=[...state.data.orders].sort((a,b)=>b.id-a.id);
+ return `<div class="heading"><h1>Orders</h1><p>Review orders from the storefront and connected conversations.</p></div>
+ <div class="top-actions">
+ ${workspacePath?`<a href="${workspacePath}/shop" target="_blank" rel="noopener">Open storefront ↗</a>`:''}
+ ${state.data.products.length?'<button class="primary" data-create="order">Record sale</button>':''}
+ </div>
+ <section class="card"><div class="table-wrap"><table><thead><tr><th>Order</th><th>Product</th><th>Customer</th><th>Channel</th><th>Quantity</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+ ${orders.map(order=>`<tr><td>#${order.id}</td><td data-user-content>${esc(productsById.get(order.product_id)??'—')}</td>
+ <td data-user-content>${esc(customers.get(order.conversation_id)??'—')}</td><td>${esc(order.channel)}</td><td>${order.quantity}</td>
+ <td>${money(order.unit_price*order.quantity)}</td><td>${badge(order.status)}</td><td>
+ ${order.status==='Pending'?`<button type="button" data-confirm-order="${order.id}">Confirm payment</button>`:''}
+ ${order.conversation_id?`<button type="button" data-chat="${order.conversation_id}">Open chat</button>`:''}
+ </td></tr>`).join('')||'<tr><td colspan="8">No orders yet.</td></tr>'}
+ </tbody></table></div></section>`;
 }
 
 function customerAnalytics(){
@@ -190,7 +214,7 @@ async function refreshInbox(manual=false){
 }
 const navigationGroups = [
  ['Dashboard', ['overview']],
- ['Store operations', ['products','warehouse','pricing','profile','expenses','cash','taxes','analytics']],
+ ['Store operations', ['products','orders','warehouse','pricing','profile','expenses','cash','taxes','analytics']],
  ['Customer channels', ['inbox','customers','insights','integrations']],
  ['Workspace administration', ['settings','guide']]
 ];
@@ -218,8 +242,8 @@ function render(){
  </aside>
  <div class="main">
   <header><div class="page-path"><span class="breadcrumb" data-user-content>${esc(state.data.workspace)}</span><span class="slash">/</span>${state.page[0].toUpperCase()+state.page.slice(1)}</div>
-   <div class="header-right"><button id="signout">Sign out</button></div></header>
-  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='cash'?cashPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='pricing'?pricingPage(state.data,esc):state.page==='warehouse'?warehousePage(state.data,esc):state.page==='taxes'?taxPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
+   <div class="header-right">${workspacePath?`<a href="${workspacePath}/shop" target="_blank" rel="noopener">Open storefront ↗</a>`:'<a href="/start-store">Create a store</a>'}<button id="signout">Sign out</button></div></header>
+  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='orders'?ordersPage():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='cash'?cashPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='pricing'?pricingPage(state.data,esc):state.page==='warehouse'?warehousePage(state.data,esc):state.page==='taxes'?taxPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
  </div>`;
  if(state.page==='inbox')inbox().catch(e=>toast(e.message));
  else addContextGuide(state.page);
@@ -284,6 +308,16 @@ if(state.page==='taxes'){
 }
 if(state.page==='customers')loadCustomerAccounts();
 if(state.page==='settings'){
+ const assistant=$('#assistant-settings');
+ assistant.onsubmit=async event=>{
+  event.preventDefault();
+  const button=assistant.querySelector('button');
+  button.disabled=true;
+  try{
+   await api('/api/settings/assistant',{method:'PUT',body:JSON.stringify({notes:assistant.elements.notes.value})});
+   await refreshBusiness('Assistant information saved');
+  }catch(error){assistant.querySelector('[role=alert]').textContent=error.message;button.disabled=false;}
+ };
  const form=$('#workspace-form');
  form.elements.currency.onchange=()=>{
   const changed=form.elements.currency.value!==currency;
@@ -343,7 +377,7 @@ if(go.hasAttribute('data-open-needs-reply')){
 if(go.hasAttribute('data-month-target')){
  state.businessPeriod=businessDate(undefined,state.data.settings?.time_zone).slice(0,7);
  state.businessYear=state.businessPeriod.slice(0,4);
-}history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide','warehouse','pricing','cash'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory){
+}history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide','warehouse','pricing','cash','orders'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory){
  const category=$('#business-expense').elements.category;
  category.value=go.dataset.expenseCategory;
  category.dispatchEvent(new Event('input'));
@@ -460,7 +494,7 @@ function auth(configured, ownerSetupFromHost){
   $('#app').innerHTML='<main class="auth-shell"><section class="card auth-card"><a class="brand" href="./">relay.</a><h1>Owner setup required</h1><p>Set an owner password using your one-time hosting code.</p><a href="./?recover=hosting">Set up owner access</a></section></main>';
   return;
  }
- $('#app').innerHTML=`<main class="auth-shell"><section class="card auth-card"><a class="brand" href="./">relay.</a><div class="eyebrow">YOUR SALES, CONNECTED</div><h1>${configured?'Welcome back.':'Create your owner account.'}</h1><p>${configured?'Sign in to manage products, orders, and conversations.':'The first account owns this shared workspace.'}</p>${`<form id="auth-form"><label>Email<input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Password<input name="password" type="password" autocomplete="${configured?'current-password':'new-password'}" minlength="12" maxlength="128" required></label><small>Use 12–128 characters.</small><p class="form-error" role="alert"></p><button class="primary">${configured?'Sign in':'Create account'}</button></form><p id="auth-notice" role="status"></p>${configured?'<a href="./?recover=hosting">Forgot password?</a>':''}`}</section></main>`;
+ $('#app').innerHTML=`<main class="auth-shell"><section class="card auth-card"><a class="brand" href="./">relay.</a><div class="eyebrow">YOUR SALES, CONNECTED</div><h1>${configured?'Welcome back.':'Create your owner account.'}</h1><p>${configured?'Sign in to manage products, orders, and conversations.':'The first account owns this shared workspace.'}</p>${`<form id="auth-form"><label>Email<input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Password<input name="password" type="password" autocomplete="${configured?'current-password':'new-password'}" minlength="12" maxlength="128" required></label><small>Use 12–128 characters.</small><p class="form-error" role="alert"></p><button class="primary">${configured?'Sign in':'Create account'}</button></form><p id="auth-notice" role="status"></p>${workspacePath?'<p><a href="./shop">Open storefront ↗</a></p>':'<p><a href="/start-store">Create a store</a></p>'}${configured?'<a href="./?recover=hosting">Forgot password?</a>':''}`}</section></main>`;
  $('#auth-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget;const button=form.querySelector('button');button.disabled=true;try{await api(configured?'/api/auth/signin':'/api/auth/setup',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});await boot();}catch(error){form.querySelector('.form-error').textContent=error.message;}finally{button.disabled=false;}};
 }
 function openCreate(kind, existing){
@@ -731,7 +765,7 @@ function downloadFinanceReport(){
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
-async function confirmPayment(id){const value=prompt('Confirm only after receiving payment. Enter unit cost for profit reporting:',state.data.products.find(p=>p.id===state.data.orders.find(o=>o.id===id)?.product_id)?.unit_cost??'');if(value===null||!value.trim())return;const unit_cost=Number(value);if(!Number.isFinite(unit_cost)||unit_cost<0)return toast('Enter a valid unit cost.');try{await api(`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost})});state.data=await api('/api/overview');await inbox();toast('Payment confirmed and stock updated');}catch(e){toast(e.message);}}
+async function confirmPayment(id){const value=prompt('Confirm only after receiving payment. Enter unit cost for profit reporting:',state.data.products.find(p=>p.id===state.data.orders.find(o=>o.id===id)?.product_id)?.unit_cost??'');if(value===null||!value.trim())return;const unit_cost=Number(value);if(!Number.isFinite(unit_cost)||unit_cost<0)return toast('Enter a valid unit cost.');try{await api(`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost})});if(state.page==='inbox'){state.data=await api('/api/overview');await inbox();toast('Payment confirmed and stock updated');}else await refreshBusiness('Payment confirmed and stock updated');}catch(e){toast(e.message);}}
 async function boot(){
  try{
   if(staticSite){

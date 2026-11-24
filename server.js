@@ -1,3 +1,4 @@
+import {createStore,findStore,publicSignupEnabled,storePrefix} from './stores.js';
 import {aiConfigured,queueHistory,replyChannels,startChatWorker} from './chat-ai.js';
 import {socialConfigured,socialWebhook} from './social.js';
 import {currencies,defaultSettings,timeZones,validIncomeTaxRate} from './public/business-model.js';
@@ -13,34 +14,57 @@ const digest=t=>createHash('sha256').update(t).digest('hex');
 async function body(req){let raw='';for await(const c of req){raw+=c;if(raw.length>12000)throw Object.assign(Error('Request too large'),{status:413});}try{return JSON.parse(raw);}catch{throw Object.assign(Error('Invalid JSON'),{status:400});}}
 const invalid=message=>{throw Object.assign(Error(message),{status:400});};
 import { readFileSync } from 'node:fs';
-import {pool,initialize} from './db.js';
+import {pool,initialize,currentStore,inStore} from './db.js';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.dirname(fileURLToPath(import.meta.url));
 await initialize();
 const stopChatWorker=process.env.NODE_ENV==='test'?()=>{}:startChatWorker();
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
-const ownerCookie=token=>`relay_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${process.env.NODE_ENV==='production'?'; Secure':''}`;
+const ownerCookieName=()=>currentStore()?'relay_store_session':'relay_session';
+const ownerCookie=(token,maxAge=604800)=>`${ownerCookieName()}=${token}; HttpOnly; SameSite=Strict; Path=${storePrefix()||'/'}; Max-Age=${maxAge}${process.env.NODE_ENV==='production'?'; Secure':''}`;
 export const server=http.createServer(async(req,res)=>{
- try {
- const url=new URL(req.url,'http://localhost'); const route=url.pathname;
- if(route==='/api/social/webhook')return socialWebhook(req,res,url,json);
+ try{
+  const url=new URL(req.url,'http://localhost');
+  const match=url.pathname.match(/^\/w\/([^/]+)(\/.*)?$/);
+  if(!match)return await handle(req,res,url,url.pathname);
+  const store=await findStore(match[1]);
+  if(!store)return json(res,404,{error:'Store not found.'});
+  if(!match[2]){
+   res.writeHead(302,{Location:'/w/'+store.slug+'/'+url.search});
+   return res.end();
+  }
+  return await inStore(store,()=>handle(req,res,url,match[2]));
+ }catch(e){console.error('Request failed:',e.code||e.name);json(res,e.status||500,{error:e.status?e.message:'Something went wrong'});}
+});
+async function handle(req,res,url,route){
+ if(route==='/api/social/webhook'&&!currentStore())return socialWebhook(req,res,url,json);
  if(route.startsWith('/api/')){
  res.setHeader('Cache-Control','no-store');
  if(!['GET','HEAD'].includes(req.method)&&req.headers.origin&&req.headers.origin!==`http://${req.headers.host}`&&req.headers.origin!==`https://${req.headers.host}`)return json(res,403,{error:'Invalid request origin'});
- if(route.startsWith('/api/shop/')&&process.env.ENABLE_LEGACY_SHOP!=='1')return json(res,410,{error:'Website ordering is closed.'});
+ if(route==='/api/stores'&&!currentStore()&&req.method==='POST'){
+  if(!publicSignupEnabled())return json(res,503,{error:'Store signup is not enabled.'});
+  return json(res,201,await createStore(await body(req),{invalid,scrypt}));
+ }
+ if(route==='/api/store'&&currentStore()&&req.method==='GET'){
+  const {rows:[settings]}=await pool.query('SELECT name,currency,language FROM workspace_settings WHERE id=1');
+  return json(res,200,settings);
+ }
+ if(route.startsWith('/api/shop/')&&!currentStore()&&process.env.ENABLE_LEGACY_SHOP!=='1')return json(res,410,{error:'Website ordering is closed.'});
  if(/^\/api\/website\/(session|signup|signin|signout|chat)$/.test(route)){
   if(await customerRoutes(req,res,route.replace('/api/website/','/api/shop/'),{pool,body,invalid,json,scrypt,digest,randomBytes,timingSafeEqual,websiteChat:true}))return;
  }
  if(await customerRoutes(req,res,route,{pool,body,invalid,json,scrypt,digest,randomBytes,timingSafeEqual}))return;
- const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('relay_session='))?.slice(14)||'';
+ const prefix=ownerCookieName()+'=';
+ const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(prefix))?.slice(prefix.length)||'';
  const signedIn=!!(await pool.query('SELECT token FROM sessions WHERE token=$1 AND expires_at>NOW()',[digest(cookie)])).rowCount;
  const configured=!!(await pool.query('SELECT id FROM users')).rowCount;
  if(route==='/api/auth/session'&&req.method==='GET'){
-  const status=await adminRecoveryStatus();
+  const status=currentStore()?'missing_settings':await adminRecoveryStatus();
   return json(res,200,{signedIn,configured,recoveryEnabled:recoveryEnabled(),adminRecoveryEnabled:status==='ready',adminRecoveryStatus:status,ownerSetupFromHost:process.env.NODE_ENV==='production'});
  }
  if(route==='/api/auth/recovery/access-code'&&req.method==='POST'){
+  if(currentStore())return json(res,403,{error:'Use email recovery for your store account.'});
   const token=await resetWithAccessCode(await body(req),invalid);
   if(!token)return json(res,400,{error:'The hosting recovery code is invalid, disabled, or already used.'});
   res.setHeader('Set-Cookie',ownerCookie(token));
@@ -55,6 +79,7 @@ export const server=http.createServer(async(req,res)=>{
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof p.password!=='string'||p.password.length<12||p.password.length>128)invalid('Enter a valid email and a password of 12–128 characters.');
  let verifiedHash;
  if(route.endsWith('/setup')){
+ if(currentStore())return json(res,403,{error:'Store owner is set during store registration.'});
  const allowed=ownerEmail();
  if(!allowed&&process.env.NODE_ENV==='production')return json(res,503,{error:'Set OWNER_EMAIL in the hosting settings before creating the owner account.'});
  if(allowed&&email!==allowed)return json(res,403,{error:'Use the configured owner email.'});
@@ -74,7 +99,7 @@ export const server=http.createServer(async(req,res)=>{
  if(!session.rowCount)return json(res,401,{error:'Email or password is incorrect.'});
  res.setHeader('Set-Cookie',ownerCookie(token));return json(res,200,{ok:true});
  }
- if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
+ if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie',ownerCookie('',0));return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
  }
  const resumeChat=route.match(/^\/api\/chats\/(\d{1,10})\/resume-ai$/);
@@ -92,6 +117,13 @@ export const server=http.createServer(async(req,res)=>{
  if(route==='/api/chats/analyze'&&req.method==='POST'){
   if(!aiConfigured())return json(res,503,{error:'Configure AI chat before analyzing conversations.'});
   return json(res,202,{queued:await queueHistory()});
+ }
+ if(route==='/api/settings/assistant'&&req.method==='PUT'){
+  const p=await body(req);
+  if(typeof p?.notes!=='string'||p.notes.length>5000)invalid('Store policies can be up to 5000 characters.');
+  await pool.query(`INSERT INTO workspace_settings(id,assistant_notes) VALUES(1,$1)
+   ON CONFLICT(id) DO UPDATE SET assistant_notes=EXCLUDED.assistant_notes`,[p.notes.trim()]);
+  return json(res,200,{ok:true});
  }
  if(route==='/api/settings/tax'&&req.method==='PUT'){
   const p=await body(req);
@@ -164,7 +196,7 @@ export const server=http.createServer(async(req,res)=>{
    COALESCE((SELECT json_agg(a) FROM chat_analysis a),'[]') AS "chatAnalysis",
    COALESCE((SELECT json_agg(j) FROM (SELECT conversation_id,state FROM ai_chat_jobs) j),'[]') AS "chatJobs"
    `);
-  return json(res,200,{...data,settings:data.settings??defaultSettings,workspace:data.settings?.name??defaultSettings.name,demo:process.env.SEED_DEMO==='1',socialConfigured:socialConfigured(),aiConfigured:aiConfigured(),replyChannels:aiConfigured()?replyChannels():[]});
+  return json(res,200,{...data,settings:data.settings??defaultSettings,workspace:data.settings?.name??defaultSettings.name,demo:!currentStore()&&process.env.SEED_DEMO==='1',socialConfigured:socialConfigured(),aiConfigured:aiConfigured(),replyChannels:aiConfigured()?replyChannels():[]});
  }
  if(route.match(/^\/api\/orders\/\d+\/confirm$/)&&req.method==='POST'){
  const id=Number(route.split('/')[3]);const p=await body(req);if(typeof p.unit_cost!=='number'||!Number.isFinite(p.unit_cost)||p.unit_cost<0||p.unit_cost>9999999999.99)invalid('Enter a valid unit cost.');
@@ -177,13 +209,15 @@ export const server=http.createServer(async(req,res)=>{
  if(req.method==='PATCH'&&!match[2]){let body='';for await(const c of req){body+=c;if(body.length>1000)return json(res,413,{error:'Request too large'});}let p;try{p=JSON.parse(body);}catch{return json(res,400,{error:'Invalid JSON'});}if(!['Needs reply','AI handling','Converted','Inactive'].includes(p.status))return json(res,400,{error:'Invalid status'});await pool.query('UPDATE conversations SET status=$1 WHERE id=$2',[p.status,id]);return json(res,200,{ok:true});}}
  if(route.startsWith('/api/'))return json(res,404,{error:'Not found'});
  if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
- if(['/shop','/shop/','/shop.html'].includes(route)&&process.env.ENABLE_LEGACY_SHOP!=='1'){
+ if(['/shop','/shop/','/shop.html'].includes(route)&&!currentStore()&&process.env.ENABLE_LEGACY_SHOP!=='1'){
   res.writeHead(410,{'Content-Type':'text/plain; charset=utf-8'});
   return res.end('Website ordering is closed. / الطلبات من الموقع متوقفة.');
  }
- const files={'/guide.js':'guide.js','/chat':'website-chat.html','/chat/':'website-chat.html','/website-chat.js':'website-chat.js','/i18n.js':'i18n.js','/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
- }catch(e){console.error('Request failed:',e.code||e.name);json(res,e.status||500,{error:e.status?e.message:'Something went wrong'});}
-});
+ if(currentStore()&&['/shop/','/shop.html'].includes(route)){
+  res.writeHead(302,{Location:storePrefix()+'/shop'+url.search});return res.end();
+ }
+ const files={'/start-store':'start-store.html','/start-store.js':'start-store.js','/guide.js':'guide.js','/chat':'website-chat.html','/chat/':'website-chat.html','/website-chat.js':'website-chat.js','/i18n.js':'i18n.js','/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
+}
 if(process.env.NODE_ENV!=='test')server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('Relay CRM listening on port '+(process.env.PORT||3000)));
 
 export async function close(){stopChatWorker();await new Promise(resolve=>server.close(resolve));await pool.end();}

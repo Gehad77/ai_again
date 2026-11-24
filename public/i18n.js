@@ -98,6 +98,20 @@ Store team|فريق المتجر
 Unable to connect|تعذّر الاتصال
 Please wait a few seconds before sending another message.|استني ثواني قبل إرسال رسالة تانية.
 Customers|العملاء
+Orders|الطلبات
+Create a store|إنشاء متجر
+Open storefront ↗|فتح واجهة المتجر ↗
+Review orders from the storefront and connected conversations.|تابعي الطلبات من واجهة المتجر والمحادثات المرتبطة.
+No orders yet.|مفيش طلبات لسه.
+Assistant information|معلومات المساعد
+Add shipping, payments, returns and approved answers for this store. Use public business information only.|ضيفي الشحن والدفع والاسترجاع والردود المعتمدة للمتجر. اكتبي معلومات عامة عن النشاط.
+Store policies|سياسات المتجر
+Save assistant information|حفظ معلومات المساعد
+Assistant information saved|تم حفظ معلومات المساعد
+Available products|المنتجات المتاحة
+Create customer account|إنشاء حساب عميل
+Sign up to order or chat|سجّل حساب للطلب أو المحادثة
+No products yet.|لسه مفيش منتجات.
 Products|المنتجات
 Profile|ملف النشاط
 Analytics|التحليلات

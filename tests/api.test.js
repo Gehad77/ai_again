@@ -17,7 +17,16 @@ const setup=await rawFetch(base+'/api/auth/setup',{method:'POST',body:JSON.strin
 assert.equal(setup.status,200);
 const cookie=setup.headers.get('set-cookie').split(';')[0];
 const fetch=(url,options={})=>rawFetch(url,{...options,headers:{...options.headers,cookie}});
-after(async()=>{await close();await admin.query(`DROP SCHEMA ${schema} CASCADE`);await admin.end();});
+after(async()=>{
+ await close();
+ const {rows}=await admin.query(`SELECT schema_name FROM ${schema}.platform_stores`);
+ for(const {schema_name} of rows){
+  assert.match(schema_name,/^store_[a-f0-9]{32}$/);
+  await admin.query('DROP SCHEMA '+schema_name+' CASCADE');
+ }
+ await admin.query(`DROP SCHEMA ${schema} CASCADE`);
+ await admin.end();
+});
 test('workspace returns seeded conversations and inventory',async()=>{const r=await fetch(base+'/api/overview');assert.equal(r.status,200);const d=await r.json();assert.equal(d.conversations.length,6);assert.equal(d.products.length,4);assert.equal(d.demo,true);});
 test('reply persists and conversion status updates',async()=>{let r=await fetch(base+'/api/conversations/1/messages',{method:'POST',body:JSON.stringify({body:'Olive is available. Would you like to order?'})});assert.equal(r.status,201);let msgs=await(await fetch(base+'/api/conversations/1')).json();assert.equal(msgs.at(-1).role,'agent');assert.match(msgs.at(-1).body,/Olive/);r=await fetch(base+'/api/conversations/1',{method:'PATCH',body:JSON.stringify({status:'Converted'})});assert.equal(r.status,200);const d=await(await fetch(base+'/api/overview')).json();assert.equal(d.conversations[0].status,'Converted');});
 test('rejects invalid payloads and missing conversations',async()=>{for(const body of ['{',JSON.stringify({body:''})]){const r=await fetch(base+'/api/conversations/1/messages',{method:'POST',body});assert.equal(r.status,400);}assert.equal((await fetch(base+'/api/conversations/999')).status,404);assert.equal((await fetch(base+'/api/conversations/1',{method:'PATCH',body:JSON.stringify({status:'nonsense'})})).status,400);});
@@ -60,7 +69,8 @@ test('workspace preferences save centrally and preserve the currency confirmatio
  assert.equal((await save(settings)).status,200);
  const {workspace,settings:saved}=await (await fetch(base+'/api/overview')).json();
  assert.equal(workspace,'Cotton Works');
- const {id,income_tax_rate,...preferences}=saved;
+ const {id,income_tax_rate,assistant_notes,...preferences}=saved;
+ assert.equal(assistant_notes,'');
  assert.equal(income_tax_rate,null);
  assert.deepEqual(preferences,settings);
 });
@@ -434,5 +444,107 @@ test('hosting recovery changes the existing owner once and preserves business da
  }finally{
   delete process.env.OWNER_EMAIL;
   delete process.env.OWNER_ACCESS_CODE;
+ }
+});
+
+test('storefront orders, customer sessions, social threads and AI policies stay inside each store',async()=>{
+ const request=(path,method='GET',payload,cookie)=>rawFetch(base+path,{
+  method,headers:cookie?{cookie}:{},
+  ...(payload===undefined?{}:{body:JSON.stringify(payload)})
+ });
+ const sessionCookie=response=>response.headers.get('set-cookie').split(';')[0];
+ const storefrontEnv={
+  STOREFRONT_SIGNUP_ENABLED:'1',AI_CHAT_ENABLED:'1',OPENAI_API_KEY:'test-store-openai',
+  META_APP_SECRET:'test-store-signature',META_VERIFY_TOKEN:'test-store-verify',META_GRAPH_VERSION:'v23.0',
+  STORE_META_ROUTES:JSON.stringify({
+   'Messenger:1101':{store:'store-alpha',token:'alpha-token'},
+   'Messenger:1102':{store:'store-beta',token:'beta-token'}
+  })
+ };
+ const envBefore=Object.fromEntries(Object.keys(storefrontEnv).map(key=>[key,process.env[key]]));
+ Object.assign(process.env,storefrontEnv);
+ try{
+  assert.equal((await request('/start-store')).status,200);
+  const stores=[];
+  for(const [slug,name,item,policy] of [
+   ['store-alpha','Alpha','Alpha bag','Only Alpha ships to Cairo'],
+   ['store-beta','Beta','Beta hat','Only Beta offers store pickup']
+  ]){
+   const credentials={email:'store-owner@example.com',password:'test-password-'+slug};
+   const signup=await request('/api/stores','POST',{slug,name,...credentials});
+   assert.equal(signup.status,201);
+   const links=await signup.json();
+   assert.equal(links.storefront,'/w/'+slug+'/shop');
+   assert.equal((await request(links.storefront)).status,200);
+   const path='/w/'+slug+'/api';
+   const login=await request(path+'/auth/signin','POST',credentials);
+   assert.equal(login.status,200);
+   assert(login.headers.get('set-cookie').includes('Path=/w/'+slug));
+   const owner=sessionCookie(login);
+   assert.equal((await request(path+'/settings/assistant','PUT',{notes:policy},owner)).status,200);
+   const product=await request(path+'/products','POST',{name:item,category:'Test',price:25,unit_cost:10,stock:6},owner);
+   assert.equal(product.status,201);
+   assert.equal((await product.json()).id,1000);
+   const signupBuyer=await request(path+'/shop/signup','POST',{name:name+' buyer',email:'buyer@example.com',password:'buyer-password-123'});
+   assert.equal(signupBuyer.status,200);
+   assert(signupBuyer.headers.get('set-cookie').includes('Path=/w/'+slug));
+   const buyer=sessionCookie(signupBuyer);
+   const publicCatalog=await(await request(path+'/shop/products')).json();
+   assert.deepEqual(publicCatalog.products.map(p=>p.name),[item]);
+   assert(!('unit_cost' in publicCatalog.products[0]));
+   stores.push({slug,owner,buyer,path,item,policy});
+  }
+  const [alpha,beta]=stores;
+  assert.equal((await request(beta.path+'/overview','GET',undefined,alpha.owner)).status,401);
+  assert.equal((await request(beta.path+'/shop/chat','GET',undefined,alpha.buyer)).status,401);
+  assert.equal((await request(alpha.path+'/auth/recovery/access-code','POST',{},alpha.owner)).status,403);
+  const order=await request(alpha.path+'/shop/orders','POST',{product_id:1000,quantity:2,request_key:'alpha-test-request-123'},alpha.buyer);
+  assert.equal(order.status,201);
+  const {id}=await order.json();
+  let alphaData=await(await request(alpha.path+'/overview','GET',undefined,alpha.owner)).json();
+  const betaData=await(await request(beta.path+'/overview','GET',undefined,beta.owner)).json();
+  assert.deepEqual([alphaData.orders[0].status,alphaData.products[0].stock,betaData.orders.length],['Pending',6,0]);
+  assert.equal((await request(alpha.path+'/orders/'+id+'/confirm','POST',{unit_cost:10},alpha.owner)).status,200);
+  alphaData=await(await request(alpha.path+'/overview','GET',undefined,alpha.owner)).json();
+  assert.deepEqual([alphaData.orders[0].status,alphaData.products[0].stock],['Paid',4]);
+
+  const body=JSON.stringify({object:'page',entry:[
+   {id:'1101',messaging:[{sender:{id:'999'},message:{mid:'tenant-test',text:'Alpha shipping?'}}]},
+   {id:'1102',messaging:[{sender:{id:'999'},message:{mid:'tenant-test',text:'Beta pickup?'}}]}
+  ]});
+  const signature='sha256='+createHmac('sha256',storefrontEnv.META_APP_SECRET).update(body).digest('hex');
+  assert.equal((await rawFetch(base+'/api/social/webhook',{method:'POST',body,headers:{'x-hub-signature-256':signature}})).status,200);
+  const {inStore}=await import('../db.js');
+  const {findStore}=await import('../stores.js');
+  const {processChatJob}=await import('../chat-ai.js');
+  for(const [index,store] of stores.entries()){
+   const inputs=[],deliveries=[];
+   globalThis.fetch=async(url,options)=>{
+    if(url==='https://api.openai.com/v1/responses'){
+     inputs.push(JSON.parse(JSON.parse(options.body).input));
+     return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({
+      intent:'delivery',stage:'interested',summary:'Asked about delivery.',themes:['delivery'],
+      reply:'Here is the store information.',humanReview:false,reviewReason:''
+     })}]}]});
+    }
+    deliveries.push({url,token:options.headers.Authorization});
+    return Response.json({message_id:'sent'});
+   };
+   await inStore(await findStore(store.slug),async()=>{assert(await processChatJob());});
+   assert.deepEqual(inputs.map(input=>input.catalog.map(product=>product.name)),[[store.item]]);
+   assert.equal(inputs[0].policies,store.policy);
+   assert.equal(deliveries.length,1);
+   assert.equal(deliveries[0].token,index===0?'Bearer alpha-token':'Bearer beta-token');
+   assert(deliveries[0].url.includes(index===0?'/1101/':'/1102/'));
+   const data=await(await request(store.path+'/overview','GET',undefined,store.owner)).json();
+   assert(data.conversations.some(c=>c.channel==='Messenger'));
+   assert.equal(data.chatAnalysis.length,1);
+  }
+ }finally{
+  globalThis.fetch=rawFetch;
+  for(const [key,value] of Object.entries(envBefore)){
+   if(value===undefined)delete process.env[key];
+   else process.env[key]=value;
+  }
  }
 });

@@ -1,8 +1,9 @@
 import {createHmac, timingSafeEqual} from 'node:crypto';
 import {queueChat} from './chat-ai.js';
-import {pool} from './db.js';
+import {findStore,hasMetaRoute,metaRoute,metaRoutesConfigured} from './stores.js';
+import {pool,currentStore,inStore} from './db.js';
 
-export const socialConfigured=()=>Boolean(process.env.META_APP_SECRET&&process.env.META_VERIFY_TOKEN);
+export const socialConfigured=()=>Boolean(process.env.META_APP_SECRET&&process.env.META_VERIFY_TOKEN&&(!currentStore()||hasMetaRoute(currentStore().slug)));
 const items=value=>Array.isArray(value)?value:[];
 const id=value=>typeof value==='string'&&/^[A-Za-z0-9_:.=-]{1,300}$/.test(value);
 
@@ -54,7 +55,25 @@ export async function socialWebhook(req,res,url,json){
  let payload;
  try{payload=JSON.parse(raw);}catch{return json(res,400,{error:'Invalid JSON.'});}
  const events=messages(payload);
- if(!events.length)return json(res,200,{ok:true});
+ const groups=new Map();
+ for(const event of events){
+  const [channel,account]=event;
+  const slug=metaRoutesConfigured()?metaRoute(channel,account)?.store:'legacy';
+  if(!slug)continue;
+  if(!groups.has(slug))groups.set(slug,[]);
+  groups.get(slug).push(event);
+ }
+ for(const [slug,deliveries] of groups){
+  if(slug==='legacy')await persistMessages(deliveries);
+  else{
+   const store=await findStore(slug);
+   if(store)await inStore(store,()=>persistMessages(deliveries));
+  }
+ }
+ return json(res,200,{ok:true});
+}
+
+async function persistMessages(events){
  const client=await pool.connect();
  try{
   await client.query('BEGIN');
@@ -76,7 +95,6 @@ export async function socialWebhook(req,res,url,json){
    await client.query("UPDATE conversations SET status='Needs reply' WHERE id=$1",[thread.conversation_id]);
   }
   await client.query('COMMIT');
-  return json(res,200,{ok:true});
  }catch(error){await client.query('ROLLBACK');throw error;}
  finally{client.release();}
 }

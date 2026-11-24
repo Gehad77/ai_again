@@ -1,13 +1,78 @@
 import pg from 'pg';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {readFileSync} from 'node:fs';
 if(!process.env.DATABASE_URL)throw new Error('Set DATABASE_URL to a PostgreSQL connection URL. See README.md.');
 // Monetary values retain NUMERIC precision in PostgreSQL; the demo API returns JSON numbers.
 pg.types.setTypeParser(1700,Number);
-export const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:10,connectionTimeoutMillis:10000});
-pool.on('error',()=>console.error('PostgreSQL connection error; check database availability.'));
+export const basePool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:10,connectionTimeoutMillis:10000});
+basePool.on('error',()=>console.error('PostgreSQL connection error; check database availability.'));
+const storeContext=new AsyncLocalStorage();
+export const currentStore=()=>storeContext.getStore();
+export const inStore=(store,run)=>storeContext.run(store,run);
+export const validStoreSchema=name=>typeof name==='string'&&/^store_[a-f0-9]{32}$/.test(name);
+
+export async function selectStoreSchema(client,name){
+ if(!validStoreSchema(name))throw Error('Invalid store schema.');
+ // A transaction-local search path works with transaction-mode connection pooling.
+ await client.query("SELECT set_config('search_path',$1,true)",[name]);
+}
+
+async function storeConnection(name){
+ const client=await basePool.connect();
+ try{
+  await client.query('BEGIN');
+  await selectStoreSchema(client,name);
+ }catch(error){client.release(error);throw error;}
+ let active=true;
+ return {
+  async query(sql,params){
+   if(!active)throw Error('Store transaction has ended.');
+   if(sql==='BEGIN')return;
+   const result=await client.query(sql,params);
+   if(sql==='COMMIT'||sql==='ROLLBACK')active=false;
+   return result;
+  },
+  release(){
+   if(active)void client.query('ROLLBACK').then(()=>client.release(),error=>client.release(error));
+   else client.release();
+  }
+ };
+}
+
+export const pool={
+ connect:()=>currentStore()?storeConnection(currentStore().schema_name):basePool.connect(),
+ async query(sql,params){
+  if(!currentStore())return basePool.query(sql,params);
+  const client=await pool.connect();
+  try{
+   const result=await client.query(sql,params);
+   await client.query('COMMIT');
+   return result;
+  }finally{client.release();}
+ },
+ end:()=>basePool.end()
+};
+
 export async function initialize(){
- const c=await pool.connect();
- try{await c.query('BEGIN');
+ const c=await basePool.connect();
+ try{
+  await c.query('BEGIN');
+  await initializeSchema(c,process.env.SEED_DEMO==='1'&&process.env.NODE_ENV!=='production');
+  await c.query(`CREATE TABLE IF NOT EXISTS platform_stores(
+    slug TEXT PRIMARY KEY, schema_name TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  const {rows}=await c.query('SELECT schema_name FROM platform_stores');
+  for(const store of rows){
+   await selectStoreSchema(c,store.schema_name);
+   await initializeSchema(c,false);
+  }
+  await c.query('COMMIT');
+ }catch(error){await c.query('ROLLBACK');throw error;}
+ finally{c.release();}
+}
+
+export async function initializeSchema(c,seed){
  await c.query(`CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY CHECK(id=1),email TEXT NOT NULL,password_hash TEXT NOT NULL,salt TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,expires_at TIMESTAMPTZ NOT NULL);
  CREATE SEQUENCE IF NOT EXISTS product_ids START 1000;
@@ -58,7 +123,8 @@ export async function initialize(){
   ADD COLUMN IF NOT EXISTS time_zone TEXT NOT NULL DEFAULT 'Africa/Cairo',
   ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER NOT NULL DEFAULT 10,
   ADD COLUMN IF NOT EXISTS default_period TEXT NOT NULL DEFAULT 'month',
-  ADD COLUMN IF NOT EXISTS income_tax_rate NUMERIC(5,2) CHECK(income_tax_rate BETWEEN 0 AND 100);
+  ADD COLUMN IF NOT EXISTS income_tax_rate NUMERIC(5,2) CHECK(income_tax_rate BETWEEN 0 AND 100),
+  ADD COLUMN IF NOT EXISTS assistant_notes TEXT NOT NULL DEFAULT '';
  CREATE TABLE IF NOT EXISTS social_threads(
   channel TEXT NOT NULL, account TEXT NOT NULL, sender TEXT NOT NULL,
   conversation_id INTEGER UNIQUE NOT NULL REFERENCES conversations(id),
@@ -98,7 +164,7 @@ export async function initialize(){
   product_id INTEGER NOT NULL REFERENCES products(id),period TEXT NOT NULL,
   units INTEGER NOT NULL CHECK(units>0),PRIMARY KEY(product_id,period)
  );`);
- if(process.env.SEED_DEMO==='1'&&process.env.NODE_ENV!=='production'){
+ if(seed){
  const d=JSON.parse(readFileSync(new URL('./public/demo-data.json',import.meta.url),'utf8'));
  for(const x of d.overview.conversations)await c.query('INSERT INTO conversations VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',[x.id,x.name,x.initials,x.channel,x.product,x.status,x.intent,x.color]);
  for(const x of d.overview.products)await c.query('INSERT INTO products VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING',[x.id,x.name,x.category,x.price,x.stock,x.emoji,x.color]);
@@ -106,6 +172,4 @@ export async function initialize(){
  for(const x of d.overview.orders)await c.query('INSERT INTO orders VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',[x.id,x.product_id,x.quantity,x.unit_price,x.unit_cost,x.channel,x.status,x.date]);
  await c.query("SELECT setval(pg_get_serial_sequence('messages','id'),COALESCE((SELECT MAX(id) FROM messages),1),(SELECT COUNT(*)>0 FROM messages))");
  }
- await c.query('COMMIT');
- }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
 }

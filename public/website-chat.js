@@ -1,12 +1,13 @@
 import { language, localize, setLanguage, translate } from './i18n.js';
 
+const workspacePath=location.pathname.match(/^\/w\/[^/]+/)?.[0]??'';
 const root=document.querySelector('#website-chat');
 let timer;
 let customer;
 const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
 async function request(path,payload){
- const response=await fetch('/api/website/'+path,payload===undefined?undefined:{
+ const response=await fetch(workspacePath+'/api/website/'+path,payload===undefined?undefined:{
   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
  });
  const data=await response.json();
