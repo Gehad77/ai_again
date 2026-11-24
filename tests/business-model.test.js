@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultReportPeriod, expenseBreakdown, financials, productResults, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
+import { defaultReportPeriod, expenseBreakdown, financials, incomeTaxPlan, productResults, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -87,4 +87,18 @@ test('product profit deducts linked expenses once and excludes general expenses'
   id:1,name:'Shirt',units:2,revenue:60,gross:40,direct:8,profit:32
  });
  assert.equal(financials(data,'2026-11').net,22);
+});
+
+test('income tax estimate offsets recorded payment without deducting it twice',()=>{
+ const expenses=[{category:'Rent',date:'2026-11-01',amount:150},
+  {category:'Income tax',date:'2026-11-20',amount:15},
+  {category:'Income tax',date:'2026-10-31',amount:20}];
+ const orders=[{status:'Paid',date:'2026-11-02T12:00:00Z',quantity:10,unit_price:100,unit_cost:60}];
+ const report=financials({orders,expenses},'2026-11');
+ assert.deepEqual(incomeTaxPlan(report,20),{beforeTax:250,paid:15,estimate:50,reserve:35,afterTax:200});
+ assert.equal(incomeTaxPlan(report,null).estimate,null);
+ assert.deepEqual(incomeTaxPlan({net:-105,paidIncomeTax:5},20),
+  {beforeTax:-100,paid:5,estimate:0,reserve:0,afterTax:-105});
+ assert.deepEqual(incomeTaxPlan({net:180,paidIncomeTax:70},20),
+  {beforeTax:250,paid:70,estimate:50,reserve:0,afterTax:180});
 });

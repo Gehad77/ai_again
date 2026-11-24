@@ -61,6 +61,28 @@ Analytics|التحليلات
 Integrations|ربط السوشيال
 Settings|الإعدادات
 Expenses|المصروفات
+Taxes|الضرائب
+Guide|الدليل
+Business guide|دليل النشاط
+Income tax|ضريبة الدخل
+Other taxes|ضرائب أخرى
+Plan the income tax reserve for the selected period.|احسبي احتياطي ضريبة الدخل للفترة المختارة.
+Income tax estimate|تقدير ضريبة الدخل
+Use a rate appropriate for your business. This is a planning estimate, not a tax filing calculation.|استخدمي نسبة مناسبة لنشاطك. ده تقدير للتخطيط، وتقديم الإقرار له حساباته.
+Income tax rate (%)|نسبة ضريبة الدخل (%)
+Save tax rate|حفظ نسبة الضريبة
+Record a tax payment|تسجيل ضريبة مدفوعة
+Leave the rate blank to turn off estimates.|سيبي خانة النسبة فاضية لو عايزة توقفي التقدير.
+Profit before income tax|الربح قبل ضريبة الدخل
+Estimated income tax|ضريبة الدخل المقدّرة
+Recorded income tax payments|ضريبة الدخل المدفوعة والمسجّلة
+Remaining tax reserve|احتياطي الضريبة المتبقي
+Estimated result after income tax|صافي النتيجة بعد تقدير ضريبة الدخل
+Includes the remaining tax reserve|يشمل احتياطي الضريبة المتبقي
+Record a tax payment in the period you want it to offset. VAT and sales tax are outside this estimate.|سجّلي الضريبة المدفوعة في الفترة اللي عايزة تخصميها منها. التقدير هنا لضريبة الدخل، والقيمة المضافة وضريبة المبيعات ليهم حساب منفصل.
+Tax rate saved|تم حفظ نسبة الضريبة
+Enter a rate from 0 to 100 with up to two decimal places, or leave it blank.|اكتبي نسبة من صفر إلى ١٠٠ برقمين عشريين على الأكثر، أو سيبيها فاضية.
+Record income tax as a general expense with no product selected.|سجّلي ضريبة الدخل كمصروف عام من غير ربطها بمنتج.
 Workspace preferences|تفضيلات مساحة العمل
 Business name|اسم النشاط
 Language|اللغة

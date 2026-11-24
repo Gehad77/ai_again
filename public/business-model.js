@@ -24,9 +24,11 @@ export function stockChange(product, input) {
   return {kind, delta, note: note.trim(), stock_after, unit_cost: product.unit_cost ?? null};
 }
 
+export const incomeTaxCategory='Income tax';
+
 export const expenseCategories = Object.freeze([
   'Purchases', 'Materials', 'Manufacturing', 'Marketing', 'Sales', 'Tools & subscriptions',
-  'Rent', 'Transportation', 'Shipping', 'Other'
+  'Rent', 'Transportation', 'Shipping', incomeTaxCategory, 'Other taxes', 'Other'
 ]);
 
 export function expenseEntry(input) {
@@ -40,6 +42,9 @@ export function expenseEntry(input) {
     throw Error('Enter a category, description, positive amount, and valid date.');
   }
   const standard = expenseCategories.find(name => name.toLowerCase() === category.toLowerCase());
+  if(standard===incomeTaxCategory&&(product_id!==null||included_in_product_cost)){
+    throw Error('Record income tax as a general expense with no product selected.');
+  }
   return {description: description.trim(), amount, date, category: standard ?? category, product_id, included_in_product_cost};
 }
 
@@ -58,7 +63,7 @@ export function expenseBreakdown(expenses) {
 }
 
 export const defaultSettings = Object.freeze({
-  name:'Olive & Co.', language:null, time_zone:'Africa/Cairo', low_stock_threshold:10, default_period:'month'
+  name:'Olive & Co.', language:null, time_zone:'Africa/Cairo', low_stock_threshold:10, default_period:'month', income_tax_rate:null
 });
 
 export const timeZones = new Set(['UTC', ...Intl.supportedValuesOf('timeZone')]);
@@ -101,11 +106,13 @@ export function financials(data, period) {
   const recordedExpenses = expenses.reduce((sum, e) => sum + cents(e.amount), 0);
   const includedCosts = expenses.filter(e => e.included_in_product_cost).reduce((sum, e) => sum + cents(e.amount), 0);
   const overhead = recordedExpenses - includedCosts;
+  const paidIncomeTax=expenses.filter(e=>e.category?.toLowerCase()===incomeTaxCategory.toLowerCase()&&!e.included_in_product_cost)
+    .reduce((sum,e)=>sum+cents(e.amount),0);
   const writeoffs = losses.reduce((sum, m) => sum - m.delta * cents(m.unit_cost), 0);
   return {
     revenue: revenue / 100, cogs: cogs / 100, gross: (revenue - cogs) / 100,
     overhead: overhead / 100, writeoffs: writeoffs / 100,
-    recordedExpenses: recordedExpenses / 100, includedCosts: includedCosts / 100,
+    recordedExpenses: recordedExpenses / 100, includedCosts: includedCosts / 100, paidIncomeTax:paidIncomeTax/100,
     net: (revenue - cogs - overhead - writeoffs) / 100, expenses,
     units: sales.reduce((sum, o) => sum + o.quantity, 0)
   };
@@ -180,5 +187,25 @@ export function salesPlan(report, target, product){
     profitRevenue:contribution>0?(Math.floor(spending/contribution)+1)*price/100:null,
     extraUnitsToCover:coverRemaining===0?0:contribution>0?Math.ceil(coverRemaining/contribution):null,
     extraUnitsToProfit:profitRemaining===0?0:contribution>0?Math.ceil(profitRemaining/contribution):null
+  };
+}
+
+
+export function validIncomeTaxRate(rate){
+  return rate===null||(isMoney(rate)&&rate<=100);
+}
+
+export function incomeTaxPlan(report,rate){
+  const paid=cents(report.paidIncomeTax);
+  const recordedNet=cents(report.net);
+  const beforeTax=recordedNet+paid;
+  const estimate=rate==null?null:Math.round(Math.max(0,beforeTax)*Math.round(rate*100)/10000);
+  const reserve=estimate===null?null:Math.max(0,estimate-paid);
+  return {
+    beforeTax:beforeTax/100,
+    paid:paid/100,
+    estimate:estimate===null?null:estimate/100,
+    reserve:reserve===null?null:reserve/100,
+    afterTax:reserve===null?null:(recordedNet-reserve)/100
   };
 }

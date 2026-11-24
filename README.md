@@ -118,3 +118,5 @@ The **Expenses** page tracks spending by category and product for the selected m
 
 
 In **Expenses → Sales targets**, save a monthly or quarterly revenue goal and unit goal. The dashboard measures progress using paid orders. Estimates use average paid prices and unit margins, or the selected product price and cost. Break-even and first-profit estimates include recorded operating expenses and inventory write-offs. **Profit by product** deducts linked expenses and write-offs, and the business net result also deducts general expenses.
+
+**Business guide** documents the dashboard sections and the financial formulas in Arabic and English. From **Taxes**, save a planning rate for income tax, select a reporting period, and record payments using the **Income tax** expense category. The reserve is the estimated tax on positive pre-tax profit minus recorded payments for that same period, floored at zero. The dashboard does not supply statutory rates or compute VAT, sales tax, or filing obligations.

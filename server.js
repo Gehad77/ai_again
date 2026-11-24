@@ -1,6 +1,6 @@
 import {aiConfigured,queueHistory,replyChannels,startChatWorker} from './chat-ai.js';
 import {socialConfigured,socialWebhook} from './social.js';
-import {currencies,defaultSettings,timeZones} from './public/business-model.js';
+import {currencies,defaultSettings,timeZones,validIncomeTaxRate} from './public/business-model.js';
 import { adminRecoveryStatus, resetWithAccessCode } from './owner-access-code.js';
 import { ownerEmail, recoveryEnabled, recover } from './owner-recovery.js';
 import http from 'node:http';
@@ -81,6 +81,13 @@ export const server=http.createServer(async(req,res)=>{
   if(!aiConfigured())return json(res,503,{error:'Configure AI chat before analyzing conversations.'});
   return json(res,202,{queued:await queueHistory()});
  }
+ if(route==='/api/settings/tax'&&req.method==='PUT'){
+  const p=await body(req);
+  if(!validIncomeTaxRate(p?.rate))invalid('Enter a rate from 0 to 100 with up to two decimal places, or leave it blank.');
+  await pool.query(`INSERT INTO workspace_settings(id,income_tax_rate) VALUES(1,$1)
+    ON CONFLICT(id) DO UPDATE SET income_tax_rate=EXCLUDED.income_tax_rate`,[p.rate]);
+  return json(res,200,{ok:true});
+ }
  if(route==='/api/settings'&&req.method==='PUT'){
   const p=await body(req);
   const name=typeof p?.name==='string'?p.name.trim():'';
@@ -160,7 +167,7 @@ export const server=http.createServer(async(req,res)=>{
   res.writeHead(410,{'Content-Type':'text/plain; charset=utf-8'});
   return res.end('Website ordering is closed. / الطلبات من الموقع متوقفة.');
  }
- const files={'/chat':'website-chat.html','/chat/':'website-chat.html','/website-chat.js':'website-chat.js','/i18n.js':'i18n.js','/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
+ const files={'/guide.js':'guide.js','/chat':'website-chat.html','/chat/':'website-chat.html','/website-chat.js':'website-chat.js','/i18n.js':'i18n.js','/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
  }catch(e){console.error('Request failed:',e.code||e.name);json(res,e.status||500,{error:e.status?e.message:'Something went wrong'});}
 });
 if(process.env.NODE_ENV!=='test')server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('Relay CRM listening on port '+(process.env.PORT||3000)));

@@ -1,5 +1,5 @@
 import { currency, formatMoney, locale, translate } from './i18n.js';
-import { businessDate, financials, expenseBreakdown, expenseCategories, pricingPlan, productResults, reportMargins, salesPlan } from './business-model.js';
+import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, pricingPlan, productResults, reportMargins, salesPlan } from './business-model.js';
 
 const usd = formatMoney;
 const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
@@ -101,6 +101,30 @@ export function periodControls(year, period){
   const quarters = Array.from({length:4}, (_, i) => `${year}-Q${i+1}`);
   return `<div class="business-controls"><label>Year <input id="business-year" type="number" min="1000" max="9999" value="${year}"></label>
     <label>Report period <select id="business-period">${[year,...quarters,...months].map(p => `<option ${p === period ? 'selected' : ''}>${p}</option>`).join('')}</select></label></div>`;
+}
+
+export function taxPage(data,year,period){
+ const rate=data.settings?.income_tax_rate??null;
+ const plan=incomeTaxPlan(financials(data,period),rate);
+ const amount=value=>value===null?'—':usd(value);
+ return `<div class="heading finance-heading"><div><h1>Taxes</h1><p>Plan the income tax reserve for the selected period.</p></div>${periodControls(year,period)}</div>
+ <section class="card recent business-card">
+ <div class="card-head"><div><h2>Income tax estimate</h2><p>Use a rate appropriate for your business. This is a planning estimate, not a tax filing calculation.</p></div></div>
+ <form id="income-tax-form" class="business-form">
+ <label>Income tax rate (%)<input name="rate" type="number" min="0" max="100" step="0.01" value="${rate??''}"></label>
+ <button type="submit" class="primary">Save tax rate</button>
+ <button type="button" data-go="expenses" data-jump="business-expense" data-expense-category="Income tax">Record a tax payment</button>
+ <small>Leave the rate blank to turn off estimates.</small><p class="form-error" role="alert"></p>
+ </form>
+ <div class="metrics">
+ ${metric('Profit before income tax',usd(plan.beforeTax))}
+ ${metric('Estimated income tax',amount(plan.estimate))}
+ ${metric('Recorded income tax payments',usd(plan.paid))}
+ ${metric('Remaining tax reserve',amount(plan.reserve))}
+ ${metric('Estimated result after income tax',amount(plan.afterTax))}
+ </div>
+ <p class="tax-note">Record a tax payment in the period you want it to offset. VAT and sales tax are outside this estimate.</p>
+ </section>`;
 }
 
 export function expensePage(data, esc, year, period){
@@ -271,7 +295,9 @@ export function businessProfile(data, esc, year, period) {
       ${metric('Sales revenue', usd(report.revenue), `${report.units} paid units`)}
       ${metric('Cost of goods sold', usd(report.cogs))}
       ${metric('Gross profit', usd(report.gross), 'Gross margin ' + marginLabel(margins.grossMargin))}
-      ${metric('Operating expenses', usd(report.overhead))}
+      ${metric('Operating expenses', usd(report.overhead-report.paidIncomeTax))}
+      ${report.paidIncomeTax?metric('Recorded income tax payments',usd(report.paidIncomeTax)):''}
+      ${data.settings?.income_tax_rate!=null?metric('Estimated result after income tax',usd(incomeTaxPlan(report,data.settings.income_tax_rate).afterTax), 'Includes the remaining tax reserve'):''}
       ${metric('Total recorded spending', usd(report.recordedExpenses))}
       ${metric('Inventory write-offs', usd(report.writeoffs))}
       ${metric('Net profit / loss', usd(report.net), 'Net margin ' + marginLabel(margins.netMargin))}

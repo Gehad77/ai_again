@@ -60,8 +60,23 @@ test('workspace preferences save centrally and preserve the currency confirmatio
  assert.equal((await save(settings)).status,200);
  const {workspace,settings:saved}=await (await fetch(base+'/api/overview')).json();
  assert.equal(workspace,'Cotton Works');
- const {id,...preferences}=saved;
+ const {id,income_tax_rate,...preferences}=saved;
+ assert.equal(income_tax_rate,null);
  assert.deepEqual(preferences,settings);
+});
+
+test('income tax planning rate is owner-only, validated and clearable',async()=>{
+ const options=rate=>({method:'PUT',body:JSON.stringify({rate})});
+ assert.equal((await rawFetch(base+'/api/settings/tax',options(20))).status,401);
+ assert.equal((await fetch(base+'/api/settings/tax',options(120))).status,400);
+ assert.equal((await fetch(base+'/api/settings/tax',options(17.253))).status,400);
+ assert.equal((await fetch(base+'/api/settings/tax',options(17.25))).status,200);
+ assert.equal((await (await fetch(base+'/api/overview')).json()).settings.income_tax_rate,17.25);
+ const expense={description:'Tax installment',category:'Income tax',amount:15,date:'2026-11-24'};
+ assert.equal((await fetch(base+'/api/expenses',{method:'POST',body:JSON.stringify({...expense,included_in_product_cost:true})})).status,400);
+ assert.equal((await fetch(base+'/api/expenses',{method:'POST',body:JSON.stringify(expense)})).status,201);
+ assert.equal((await fetch(base+'/api/settings/tax',options(null))).status,200);
+ assert.equal((await (await fetch(base+'/api/overview')).json()).settings.income_tax_rate,null);
 });
 
 test('signed social text reaches the inbox once per message',async()=>{
