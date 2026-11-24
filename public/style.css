@@ -153,3 +153,8 @@
 
 #product-targets { scroll-margin-top:80px; }
 #product-target-form .form-error:empty { display:none; }
+
+#tax-payments { scroll-margin-top:80px; }
+.tax-explanation { display:grid; gap:12px; padding-inline-start:22px; }
+.tax-explanation li p { margin-block:3px 0; }
+.target-tax-note { margin:6px 20px 0; }

@@ -71,6 +71,26 @@ export function contextGuide(page){
  <p>${pick(section[1])}</p><button type="button" data-go="guide">${pick(['Open the full business guide','افتحي دليل النشاط بالكامل'])}</button></details>`;
 }
 
+export function taxGuide(){
+ const steps=[
+  ['Profit before income tax','صافي الربح قبل ضريبة الدخل',
+   'Subtract the cost of sold products, operating expenses, and stock losses from paid sales. Income tax already paid is excluded from this starting figure.',
+   'اطرحي تكلفة القطع المباعة ومصاريف التشغيل والتالف من المبيعات المدفوعة. الضريبة اللي دفعتيها بالفعل ما بتتخصمش من رقم البداية ده.'],
+  ['Estimated income tax','ضريبة الدخل المقدّرة',
+   'Multiply positive pre-tax profit by your planning rate. A loss gives a zero estimate in this planner.',
+   'اضربي الربح الموجب قبل الضريبة في النسبة اللي حددتيها. لو النتيجة قبل الضريبة خسارة، التقدير في الحاسبة دي بيبقى صفر.'],
+  ['Remaining tax reserve','احتياطي الضريبة المتبقي',
+   'Subtract recorded income tax payments dated within the selected period from the estimate, down to zero. Use the actual date you paid.',
+   'اطرحي من الضريبة المقدّرة المدفوعات المسجّلة بتاريخ داخل الفترة المختارة، والاحتياطي أقل قيمة ليه صفر. سجّلي كل دفعة بتاريخها الفعلي.'],
+  ['Estimated result after income tax','صافي النتيجة بعد تقدير الضريبة',
+   'Subtract the remaining reserve from recorded net profit. Paid income tax has already been deducted as an expense.',
+   'اطرحي الاحتياطي المتبقي من صافي الربح المسجّل. ضريبة الدخل المدفوعة اتحسبت بالفعل ضمن المصروفات.']
+ ];
+ return `<section class="card recent guide-section" id="guide-taxes"><h2>${pick(['How the tax figures are calculated','إزاي أرقام الضريبة بتتحسب؟'])}</h2>
+ <ol class="tax-explanation">${steps.map(step=>`<li><strong>${pick(step.slice(0,2))}</strong><p>${pick(step.slice(2))}</p></li>`).join('')}</ol>
+ <p>${pick(['Use the estimate to set money aside when planning. VAT, sales tax and tax filing obligations use their own rules.','استخدمي التقدير عشان تعملي حساب المبلغ المطلوب في الميزانية. القيمة المضافة وضريبة المبيعات والإقرار ليهم قواعد وحسابات خاصة.'])}</p></section>`;
+}
+
 export function guidePage(){
  const money=n=>`<bdi>${formatMoney(n)}</bdi>`;
  const example=pick([
@@ -79,10 +99,12 @@ export function guidePage(){
  ]);
  return `<div class="heading"><h1>${pick(['Business guide','دليل النشاط'])}</h1><p>${pick(['Learn how to use each section and read your numbers.','اعرفي كل قسم بيتستخدم إزاي واقري أرقام نشاطك بسهولة.'])}</p></div>
  <div class="page-actions"><button class="primary" data-section="guide-calculations">${pick(['Understand the calculations','افهمي الحسابات'])}</button>
+ <button data-section="guide-taxes">${pick(['How taxes are calculated','حساب الضرائب'])}</button>
  <button data-section="guide-sections">${pick(['Explore dashboard sections','تعرّفي على الأقسام'])}</button></div>
  <section class="card recent guide-section" id="guide-calculations"><h2>${pick(['Understand the calculations','افهمي الحسابات'])}</h2>
  ${terms.map(([name,body])=>`<details><summary>${pick(name)}</summary><p>${pick(body)}</p></details>`).join('')}
  <div class="notice"><h3>${pick(['Worked example','مثال بالأرقام'])}</h3><p>${example}</p></div></section>
+ ${taxGuide()}
  <section class="card recent guide-section" id="guide-sections"><h2>${pick(['Explore dashboard sections','تعرّفي على الأقسام'])}</h2>
  <div class="guide-grid">${Object.entries(sections).map(([page,[title,body]])=>`<article><h3>${pick(title)}</h3><p>${pick(body)}</p>
  <button type="button" data-go="${page}">${pick(['Open section ↗','افتحي القسم ↗'])}</button></article>`).join('')}</div></section>`;

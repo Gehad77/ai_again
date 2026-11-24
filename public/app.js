@@ -192,7 +192,7 @@ function render(){
  <div class="main">
   <header><div class="page-path"><span class="breadcrumb" data-user-content>${esc(state.data.workspace)}</span><span class="slash">/</span>${state.page[0].toUpperCase()+state.page.slice(1)}</div>
    <div class="header-right"><button id="signout">Sign out</button></div></header>
-  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='taxes'?taxPage(state.data,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
+  <main id="page">${state.page==='overview'?overview():state.page==='products'?products():state.page==='profile'?businessProfile(state.data,esc,state.businessYear,state.businessPeriod):state.page==='expenses'?expensePage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='customers'?customers():state.page==='analytics'?analytics():state.page==='integrations'?integrations():state.page==='insights'?customerAnalytics():state.page==='settings'?settings():state.page==='taxes'?taxPage(state.data,esc,state.businessYear,state.businessPeriod):state.page==='guide'?guidePage():''}</main>
  </div>`;
  if(state.page==='inbox')inbox().catch(e=>toast(e.message));
  else addContextGuide(state.page);
@@ -239,6 +239,7 @@ $('#workspace-sidebar').onkeydown=event=>{
 if(['profile','expenses'].includes(state.page))bindBusinessProfile();
 if(state.page==='taxes'){
  bindReportControls();
+ $('[data-download-finance]').onclick=()=>downloadFinanceReport();
  const form=$('#income-tax-form');
  form.onsubmit=async event=>{
   event.preventDefault();

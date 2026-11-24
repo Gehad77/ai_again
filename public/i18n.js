@@ -81,6 +81,13 @@ Estimated result after income tax|صافي النتيجة بعد تقدير ضر
 Includes the remaining tax reserve|يشمل احتياطي الضريبة المتبقي
 Record a tax payment in the period you want it to offset. VAT and sales tax are outside this estimate.|سجّلي الضريبة المدفوعة في الفترة اللي عايزة تخصميها منها. التقدير هنا لضريبة الدخل، والقيمة المضافة وضريبة المبيعات ليهم حساب منفصل.
 Tax rate saved|تم حفظ نسبة الضريبة
+Tax payments|مدفوعات الضريبة
+Open tax planning|افتحي حساب الضرائب
+How taxes are calculated|إزاي الضريبة بتتحسب؟
+Save a rate to see the estimated tax and reserve.|احفظي النسبة عشان يظهر تقدير الضريبة والاحتياطي.
+Only income tax payments dated within the selected period are included here.|هنا بتظهر مدفوعات ضريبة الدخل بتاريخ داخل الفترة المختارة بس.
+No income tax payments recorded in this period.|مفيش مدفوعات ضريبة دخل مسجّلة في الفترة دي.
+These estimates use recorded costs. Check the Taxes section for any additional reserve.|التقدير ده حسب التكاليف المسجّلة. راجعي قسم الضرائب لو محتاجة تعملي احتياطي إضافي.
 Enter a rate from 0 to 100 with up to two decimal places, or leave it blank.|اكتبي نسبة من صفر إلى ١٠٠ برقمين عشريين على الأكثر، أو سيبيها فاضية.
 Record income tax as a general expense with no product selected.|سجّلي ضريبة الدخل كمصروف عام من غير ربطها بمنتج.
 Workspace preferences|تفضيلات مساحة العمل

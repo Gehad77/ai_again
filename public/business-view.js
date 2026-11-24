@@ -1,3 +1,4 @@
+import {taxGuide} from './guide.js';
 import { currency, formatMoney, locale, translate } from './i18n.js';
 import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, pricingPlan, productResults, productTargetReport, quarterFor, reportMargins, salesPlan } from './business-model.js';
 
@@ -103,11 +104,13 @@ export function periodControls(year, period){
     <label>Report period <select id="business-period">${[year,...quarters,...months].map(p => `<option ${p === period ? 'selected' : ''}>${p}</option>`).join('')}</select></label></div>`;
 }
 
-export function taxPage(data,year,period){
+export function taxPage(data,esc,year,period){
  const rate=data.settings?.income_tax_rate??null;
- const plan=incomeTaxPlan(financials(data,period),rate);
+ const report=financials(data,period);
+ const plan=incomeTaxPlan(report,rate);
  const amount=value=>value===null?'—':usd(value);
- return `<div class="heading finance-heading"><div><h1>Taxes</h1><p>Plan the income tax reserve for the selected period.</p></div>${periodControls(year,period)}</div>
+ return `<div class="heading finance-heading"><div><h1>Taxes</h1><p>Plan the income tax reserve for the selected period.</p></div><div class="report-toolbar">${periodControls(year,period)}<button type="button" data-download-finance>Download period report</button></div></div>
+ <div class="page-actions"><button type="button" data-section="guide-taxes">How taxes are calculated</button><button type="button" data-section="tax-payments">Tax payments</button></div>
  <section class="card recent business-card">
  <div class="card-head"><div><h2>Income tax estimate</h2><p>Use a rate appropriate for your business. This is a planning estimate, not a tax filing calculation.</p></div></div>
  <form id="income-tax-form" class="business-form">
@@ -123,8 +126,14 @@ export function taxPage(data,year,period){
  ${metric('Remaining tax reserve',amount(plan.reserve))}
  ${metric('Estimated result after income tax',amount(plan.afterTax))}
  </div>
- <p class="tax-note">Record a tax payment in the period you want it to offset. VAT and sales tax are outside this estimate.</p>
- </section>`;
+ ${rate===null?'<p class="tax-note">Save a rate to see the estimated tax and reserve.</p>':''}
+ </section>
+ <section class="card recent business-card" id="tax-payments">
+ <div class="card-head"><div><h2>Tax payments</h2><p>Only income tax payments dated within the selected period are included here.</p></div></div>
+ <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense description</th><th>Amount</th></tr></thead><tbody>
+ ${report.incomeTaxPayments.map(entry=>`<tr><td>${entry.date}</td><td data-user-content>${esc(entry.description)}</td><td>${usd(entry.amount)}</td></tr>`).join('')||'<tr><td colspan="3">No income tax payments recorded in this period.</td></tr>'}
+ </tbody></table></div></section>
+ ${taxGuide()}`;
 }
 
 export function expensePage(data, esc, year, period){
@@ -241,7 +250,7 @@ export function bindSalesTargets(data, selectedProduct, selectProduct){
         metric('Units left for unit target',target.units>0?displayUnits(plan.unitsRemaining):'—'),
         metric('Extra units for revenue target',target.amount>0?displayUnits(plan.unitsForRevenue):'—',basis)
       ].join('')}</div>
-      <h3>Covering costs and making a profit</h3>
+      <h3>Covering costs and making a profit</h3><div class="target-tax-note"><p>These estimates use recorded costs. Check the Taxes section for any additional reserve.</p><button type="button" data-go="taxes">Open tax planning</button></div>
       <div class="metrics">${[
         metric('Total sales to cover expenses',displayMoney(plan.coverRevenue),basis),
         metric('Total sales to start making a profit',displayMoney(plan.profitRevenue),basis),

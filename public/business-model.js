@@ -106,13 +106,13 @@ export function financials(data, period) {
   const recordedExpenses = expenses.reduce((sum, e) => sum + cents(e.amount), 0);
   const includedCosts = expenses.filter(e => e.included_in_product_cost).reduce((sum, e) => sum + cents(e.amount), 0);
   const overhead = recordedExpenses - includedCosts;
-  const paidIncomeTax=expenses.filter(e=>e.category?.toLowerCase()===incomeTaxCategory.toLowerCase()&&!e.included_in_product_cost)
-    .reduce((sum,e)=>sum+cents(e.amount),0);
+  const incomeTaxPayments=expenses.filter(e=>e.category?.toLowerCase()===incomeTaxCategory.toLowerCase()&&!e.included_in_product_cost);
+  const paidIncomeTax=incomeTaxPayments.reduce((sum,e)=>sum+cents(e.amount),0);
   const writeoffs = losses.reduce((sum, m) => sum - m.delta * cents(m.unit_cost), 0);
   return {
     revenue: revenue / 100, cogs: cogs / 100, gross: (revenue - cogs) / 100,
     overhead: overhead / 100, writeoffs: writeoffs / 100,
-    recordedExpenses: recordedExpenses / 100, includedCosts: includedCosts / 100, paidIncomeTax:paidIncomeTax/100,
+    recordedExpenses: recordedExpenses / 100, includedCosts: includedCosts / 100, paidIncomeTax:paidIncomeTax/100, incomeTaxPayments,
     net: (revenue - cogs - overhead - writeoffs) / 100, expenses,
     units: sales.reduce((sum, o) => sum + o.quantity, 0)
   };
