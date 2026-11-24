@@ -42,9 +42,13 @@ export async function demoApi(url,options={}){
   record(product,movement);
   save();return movements[0];
  }
- if(url==='/api/expenses'&&method==='POST'){
+ const expenseRoute=url.match(/^\/api\/expenses\/(\d+)$/);
+ if((url==='/api/expenses'&&method==='POST')||(expenseRoute&&method==='PATCH')){
   const p=expenseEntry(payload());
   if(p.product_id!==null&&!products.some(product=>product.id===p.product_id))throw Error('Choose an existing product.');
+  const existing=expenseRoute&&expenses.find(item=>item.id===Number(expenseRoute[1]));
+  if(expenseRoute&&!existing)throw Error('Expense not found.');
+  if(existing){Object.assign(existing,p);save();return existing;}
   const expense={...p,id:nextId(expenses)};
   expenses.unshift(expense);save();return expense;
  }

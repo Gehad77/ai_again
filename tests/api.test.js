@@ -228,7 +228,14 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  const categorized = await send('/api/expenses','POST',{description:'Cotton',amount:6.5,date:'2026-11-22',
   category:'  Custom  supplies ',product_id:id,included_in_product_cost:true});
  assert.equal(categorized.status,201);
- assert.equal((await categorized.json()).category,'Custom supplies');
+ const categorizedExpense=await categorized.json();
+ assert.equal(categorizedExpense.category,'Custom supplies');
+ const edit={description:'Cotton corrected',amount:9.5,date:'2026-11-23',category:'Materials',
+  product_id:id,included_in_product_cost:true};
+ const endpoint='/api/expenses/'+categorizedExpense.id;
+ assert.equal((await rawFetch(base+endpoint,{method:'PATCH',body:JSON.stringify(edit)})).status,401);
+ assert.equal((await send(endpoint,'PATCH',edit)).status,200);
+ assert.equal((await send('/api/expenses/2147483647','PATCH',edit)).status,404);
  assert.equal((await send('/api/expenses','POST',{description:'Missing product',amount:1,date:'2026-11-22',
   category:'Shipping',product_id:2147483647})).status,400);
  assert.equal((await send('/api/expenses','POST',{description:'Invalid date',amount:12.5,date:'2026-02-30'})).status, 400);
@@ -250,7 +257,10 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  assert.equal(data.expenses.find(e=>e.description==='Warehouse rent').date, '2026-11-22');
  assert.equal(data.expenses.find(e=>e.description==='Warehouse rent').category,'Uncategorized');
  assert.equal(data.targets.find(t=>t.period==='2026-Q4').units,100);
- const cotton=data.expenses.find(e=>e.description==='Cotton');
+ const cotton=data.expenses.find(e=>e.id===categorizedExpense.id);
+ assert.equal(cotton.description,'Cotton corrected');
+ assert.equal(cotton.amount,9.5);
+ assert.equal(cotton.date,'2026-11-23');
  assert.equal(cotton.product_id,id);
  assert.equal(cotton.included_in_product_cost,true);
  assert.deepEqual(data.targets.map(t=>[t.period,t.amount]).sort(), [['2026-11',50],['2026-Q4',100]]);

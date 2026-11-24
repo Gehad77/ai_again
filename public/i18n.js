@@ -403,6 +403,13 @@ No products in the warehouse.|مفيش منتجات في المخزون.
 Product saved|تم حفظ المنتج
 Order created|تم إنشاء الطلب
 Expense recorded|تم تسجيل المصروف
+Download period report|تنزيل تقرير الفترة
+Edit expense|تعديل المصروف
+Save expense|حفظ المصروف
+Cancel edit|إلغاء التعديل
+Expense updated|تم تعديل المصروف
+Edit|تعديل
+Expense not found.|المصروف غير موجود.
 Target saved|تم حفظ الهدف
 Stock updated|تم تحديث المخزون
 All products are above the low-stock threshold.|كل المنتجات فوق حد المخزون المنخفض.

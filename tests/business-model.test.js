@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultReportPeriod, expenseBreakdown, financials, incomeTaxPlan, productResults, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
+import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, salesPlan, pricingPlan, reportMargins } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -101,4 +101,18 @@ test('income tax estimate offsets recorded payment without deducting it twice',(
   {beforeTax:-100,paid:5,estimate:0,reserve:0,afterTax:-105});
  assert.deepEqual(incomeTaxPlan({net:180,paidIncomeTax:70},20),
   {beforeTax:250,paid:70,estimate:50,reserve:0,afterTax:180});
+});
+
+test('period export reconciles paid sales, expenses, and the remaining tax reserve',()=>{
+ const data={currency:'EGP',settings:{income_tax_rate:20},products:[{id:1,name:'Shirt'}],
+  orders:[{id:7,status:'Paid',date:'2026-10-28T10:00:00Z',paid_at:'2026-11-22T10:00:00Z',product_id:1,
+    quantity:10,unit_price:100,unit_cost:60,channel:'Website'}],
+  expenses:[{id:1,category:'Rent',description:'=unsafe',date:'2026-11-01',amount:150},
+    {id:2,category:'Income tax',date:'2026-11-20',amount:15}],
+  movements:[]};
+ const csv=financeCsv(data,'2026-11');
+ assert.match(csv,/"Paid sale","2026-11-22","Order 7"/);
+ assert.match(csv,/"'=unsafe","150.00","","-150.00","-150.00"/);
+ assert.match(csv,/"Estimated tax reserve","","","","","","35.00","","0.00","-35.00"/);
+ assert.match(csv,/"Total","","","","","","1000.00","600.00","235.00","200.00"/);
 });

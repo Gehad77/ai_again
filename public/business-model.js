@@ -209,3 +209,43 @@ export function incomeTaxPlan(report,rate){
     afterTax:reserve===null?null:(recordedNet-reserve)/100
   };
 }
+
+
+const csvCell=value=>{
+  const content=typeof value==='number'?value.toFixed(2):String(value??'');
+  // Keep descriptions and product names from being interpreted as spreadsheet formulas.
+  const safe=typeof value!=='number'&&/^(?:[\t\r\n]|\s*[=+@-])/.test(content)?"'"+content:content;
+  return '"'+safe.replaceAll('"','""')+'"';
+};
+
+export function financeCsv(data,period){
+  const report=financials(data,period);
+  const {sales,expenses,losses}=periodEntries(data,period);
+  const tax=incomeTaxPlan(report,data.settings?.income_tax_rate);
+  const timeZone=data.settings?.time_zone;
+  const currency=data.currency??'USD';
+  const products=new Map(data.products.map(product=>[product.id,product.name]));
+  const rows=[['Period','Currency','Type','Date','Reference','Product','Category','Description','Amount',
+    'Product cost','Recorded effect','Estimated effect']];
+  const add=(type,date,reference,product,category,description,amount,cost,effect,estimated=effect)=>{
+    rows.push([period,currency,type,date,reference,product,category,description,amount,cost,effect,estimated]);
+  };
+  for(const order of sales){
+    const revenue=order.quantity*cents(order.unit_price);
+    const cost=order.quantity*cents(order.unit_cost);
+    add('Paid sale',businessDate(order.paid_at??order.date,timeZone),'Order '+order.id,products.get(order.product_id),
+      order.channel,'',revenue/100,cost/100,(revenue-cost)/100);
+  }
+  for(const expense of expenses){
+    const included=expense.included_in_product_cost;
+    add(included?'Expense already in product cost':'Expense',expense.date,'Expense '+expense.id,products.get(expense.product_id),
+      expense.category??'Uncategorized',expense.description,expense.amount,'',included?0:-expense.amount);
+  }
+  for(const loss of losses){
+    const cost=-loss.delta*cents(loss.unit_cost)/100;
+    add('Inventory write-off',businessDate(loss.date,timeZone),'Movement '+loss.id,products.get(loss.product_id),'',loss.note,cost,'',-cost);
+  }
+  if(tax.reserve>0)add('Estimated tax reserve','','','','','',tax.reserve,'',0,-tax.reserve);
+  add('Total','','','','','',report.revenue,report.cogs,report.net,tax.afterTax??report.net);
+  return '\uFEFF'+rows.map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n';
+}

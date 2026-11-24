@@ -15,7 +15,7 @@ const sections={
  ],
  expenses:[
   ['Expenses and targets','المصروفات والأهداف'],
-  ['Record amounts you spend and link direct expenses to a product when useful. Mark amounts already included in product cost so they still show in spending but are not deducted twice. Enter a revenue target and a unit target to track each separately.','سجّلي اللي صرفتيه واربطي المصروف المباشر بالمنتج لو مناسب. علّمي على أي مبلغ دخل بالفعل في تكلفة المنتج عشان يظهر في الصرف من غير خصمه مرتين. سجّلي هدف الإيراد وهدف عدد القطع وتابعي كل واحد لوحده.']
+  ['Record amounts you spend and link direct expenses to a product when useful. Mark amounts already included in product cost so they still show in spending but are not deducted twice. You can correct an entry in the expense list, download the period report for review, and track revenue and unit goals separately.','سجّلي اللي صرفتيه واربطي المصروف المباشر بالمنتج لو مناسب. علّمي على أي مبلغ دخل بالفعل في تكلفة المنتج عشان يظهر في الصرف من غير خصمه مرتين. تقدري تصحّحي القيد من جدول المصروفات، وتنزّلي تقرير الفترة للمراجعة، وتتابعي هدف الإيراد وعدد القطع كل واحد لوحده.']
  ],
  taxes:[
   ['Taxes','الضرائب'],

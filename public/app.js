@@ -1,6 +1,6 @@
 import { contextGuide, guidePage } from './guide.js';
 import { currency, formatMoney, language, localize, locale, setCurrency, setLanguage, translate } from './i18n.js';
-import { businessDate, currencies, defaultReportPeriod, isInPeriod, timeZones } from './business-model.js';
+import { businessDate, currencies, defaultReportPeriod, financeCsv, isInPeriod, timeZones } from './business-model.js';
 import { bindPricingCalculator, bindSalesTargets, businessProfile, expensePage, stockDialog, taxPage, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
 const staticSite=location.hostname.endsWith('github.io');
@@ -14,7 +14,7 @@ const badge=s=>`<span class="badge ${s==='High intent'||s==='Converted'||s==='Pu
 const filtered=()=>state.data.conversations.filter(c=>(state.filter==='All channels'||c.channel===state.filter)&&`${c.name} ${c.product}`.toLowerCase().includes(state.search.toLowerCase()));
 function table(){return `<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Channel</th><th>Product interest</th><th>Buying signal</th><th>Status</th><th></th></tr></thead><tbody>${filtered().map(c=>`<tr data-chat="${c.id}" tabindex="0"><td><div class="person"><span class="avatar" style="background:${c.color}">${esc(c.initials)}</span><span><b data-user-content>${esc(c.name)}</b><small></small></span></div></td><td>${channel(c.channel)} ${c.channel}</td><td>${esc(c.product)}</td><td>${badge(c.intent)}</td><td><span class="dot ${c.status==='AI handling'?'purple':''}"></span>${c.status}</td><td>↗</td></tr>`).join('')||'<tr><td colspan="6">No conversations match your search.</td></tr>'}</tbody></table></div>`;}
 function filters(){return `<div class="filters"><div class="tabs">${['All channels','WhatsApp','Instagram','Messenger','Website'].map(x=>`<button class="${state.filter===x?'active':''}" data-filter="${x}">${x==='All channels'?'':channel(x)}${x}</button>`).join('')}</div><input id="search" placeholder="⌕ Search conversations" value="${esc(state.search)}" aria-label="Search conversations"></div>`;}
-function overview(){return `<div class="heading"><h1>Business overview</h1></div><div class="top-actions"><button class="primary" data-create="product">+ Add product</button><button data-go="expenses" data-jump="business-expense">Record expense</button><button data-go="inbox">View inbox ↗</button><button id="export">↗ Export report</button></div><div class="metrics">${[['Total conversations',String(state.data.conversations.length),'Social and account history','↗','mint'],['Interested customers',String(state.data.conversations.filter(c=>c.intent==='High intent').length),'Customers showing high buying intent','♧','lavender'],['Paid orders',String((state.data.orders||[]).filter(o=>o.status==='Paid').length),'Confirmed order records','▣','peach'],['Needs your attention',String(state.data.conversations.filter(c=>c.status==='Needs reply').length),'Conversations waiting for a reply','◷','yellow']].map(([label,n,sub,icon,color])=>`<article class="metric"><div>${label}<span class="metric-icon ${color}">${icon}</span></div><strong>${n}</strong><small>${sub}</small></article>`).join('')}</div>${warehouseSummary(state.data,esc)}<section class="card recent"><div class="card-head"><div><h2>Recent conversations</h2></div><button data-go="inbox">View inbox ↗</button></div>${filters()}${table()}</section>`;}
+function overview(){return `<div class="heading"><h1>Business overview</h1></div><div class="top-actions">${state.data.products.length?'<button class="primary" data-create="order">Record sale</button>':''}<button ${state.data.products.length?'':'class="primary"'} data-create="product">+ Add product</button><button data-go="expenses" data-jump="business-expense">Record expense</button><button data-go="inbox">View inbox ↗</button><button id="export">↗ Export report</button></div><div class="metrics">${[['Total conversations',String(state.data.conversations.length),'Social and account history','↗','mint'],['Interested customers',String(state.data.conversations.filter(c=>c.intent==='High intent').length),'Customers showing high buying intent','♧','lavender'],['Paid orders',String((state.data.orders||[]).filter(o=>o.status==='Paid').length),'Confirmed order records','▣','peach'],['Needs your attention',String(state.data.conversations.filter(c=>c.status==='Needs reply').length),'Conversations waiting for a reply','◷','yellow']].map(([label,n,sub,icon,color])=>`<article class="metric"><div>${label}<span class="metric-icon ${color}">${icon}</span></div><strong>${n}</strong><small>${sub}</small></article>`).join('')}</div>${warehouseSummary(state.data,esc)}<section class="card recent"><div class="card-head"><div><h2>Recent conversations</h2></div><button data-go="inbox">View inbox ↗</button></div>${filters()}${table()}</section>`;}
 function products(){return `<div class="heading"><div class="eyebrow">YOUR CATALOG</div><h1>Product catalog</h1><p></p></div><button class="primary create-action" data-create="product">+ Add product</button><div class="product-grid">${state.data.products.map(p=>`<article class="card product"><div class="product-art" style="background:${p.color}">${p.emoji}</div><small>${esc(p.category)}</small><h2>${esc(p.name)}</h2><div class="product-bottom"><strong>$${p.price.toFixed(2)}</strong>${badge(p.stock<10?'Low stock':p.stock+' in stock')}</div><p>${state.data.conversations.filter(c=>c.product===p.name).length} customer inquiries · ${(state.data.orders||[]).filter(o=>o.product_id===p.id&&o.status==='Paid').reduce((s,o)=>s+o.quantity,0)} units sold</p></article>`).join('')}</div>`;}
 function customers(){return `<div class="heading"><div class="eyebrow">PEOPLE, NOT JUST LEADS</div><h1>Meet your customers.</h1><p>Website customer accounts and conversation activity.</p></div><section class="card recent" id="customer-accounts"></section><section class="card">${filters()}${table()}</section>`;}
 const money=formatMoney;
@@ -487,13 +487,17 @@ function bindBusinessProfile(){
  bindSalesTargets(state.data,state.estimateProduct,id=>{state.estimateProduct=id;});
  bindReportControls();
  const target=$('#business-target');
+ const expenseForm=$('#business-expense');
+ if(expenseForm)bindExpenseEditing(expenseForm);
+ $('[data-download-finance]').onclick=()=>downloadFinanceReport();
+
  target.elements.period.onchange=()=>{
   state.businessPeriod=target.elements.period.value;
   render();
  };
  for(const [form, url, method, message] of [
   [target,'/api/targets','PUT','Target saved'],
-  [$('#business-expense'),'/api/expenses','POST','Expense recorded']
+  [expenseForm,'/api/expenses','POST','Expense recorded']
  ]){
   if(!form)continue;
   form.onsubmit=async e=>{
@@ -509,11 +513,12 @@ function bindBusinessProfile(){
     payload.product_id=payload.product_id?Number(payload.product_id):null;
     payload.included_in_product_cost=form.elements.included_in_product_cost.checked;
    }
-   try{await api(url,{method,body:JSON.stringify(payload)});}
+   const editing=form===expenseForm?form.dataset.expenseId:null;
+   try{await api(editing?url+'/'+editing:url,{method:editing?'PATCH':method,body:JSON.stringify(payload)});}
    catch(error){form.querySelector('.form-error').textContent=error.message;button.disabled=false;return;}
    if(form===target)state.businessPeriod=payload.period;
    else if(!isInPeriod(payload.date,state.businessPeriod)){state.businessYear=payload.date.slice(0,4);state.businessPeriod=payload.date.slice(0,7);}
-   await refreshBusiness(message);
+   await refreshBusiness(editing?'Expense updated':message);
   };
  }
  document.querySelectorAll('[data-delete-expense]').forEach(button=>{
@@ -525,6 +530,48 @@ function bindBusinessProfile(){
    await refreshBusiness('Expense deleted');
   };
  });
+}
+
+function bindExpenseEditing(form){
+ const title=$('#add-expense-title');
+ const save=form.querySelector('[type=submit]');
+ const cancel=$('#cancel-expense-edit');
+ const error=form.querySelector('.form-error');
+ cancel.onclick=()=>{
+  delete form.dataset.expenseId;
+  form.reset();
+  title.textContent='Record expense';
+  save.textContent='Record expense';
+  cancel.hidden=true;
+  error.textContent='';
+  form.elements.category.focus();
+ };
+ document.querySelectorAll('[data-edit-expense]').forEach(button=>{
+  button.onclick=()=>{
+   const entry=state.data.expenses.find(item=>item.id===Number(button.dataset.editExpense));
+   form.dataset.expenseId=entry.id;
+   for(const name of ['description','amount','date','category','product_id']){
+    form.elements[name].value=entry[name]??(name==='category'?'Uncategorized':'');
+   }
+   form.elements.included_in_product_cost.checked=Boolean(entry.included_in_product_cost);
+   title.textContent='Edit expense';
+   save.textContent='Save expense';
+   cancel.hidden=false;
+   error.textContent='';
+   jumpToSection(form.id);
+   form.elements.description.focus({preventScroll:true});
+  };
+ });
+}
+
+function downloadFinanceReport(){
+ const period=state.businessPeriod;
+ const url=URL.createObjectURL(new Blob([financeCsv(state.data,period)],{type:'text/csv;charset=utf-8'}));
+ const link=document.createElement('a');
+ link.href=url;
+ link.download='relay-finance-'+period+'.csv';
+ link.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 async function confirmPayment(id){const value=prompt('Confirm only after receiving payment. Enter unit cost for profit reporting:',state.data.products.find(p=>p.id===state.data.orders.find(o=>o.id===id)?.product_id)?.unit_cost??'');if(value===null||!value.trim())return;const unit_cost=Number(value);if(!Number.isFinite(unit_cost)||unit_cost<0)return toast('Enter a valid unit cost.');try{await api(`/api/orders/${id}/confirm`,{method:'POST',body:JSON.stringify({unit_cost})});state.data=await api('/api/overview');await inbox();toast('Payment confirmed and stock updated');}catch(e){toast(e.message);}}

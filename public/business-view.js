@@ -147,6 +147,7 @@ export function expensePage(data, esc, year, period){
   </div>
   <div class="page-actions" aria-label="Expense page sections">
     <button class="primary" type="button" data-section="business-expense">Record expense</button>
+    <button type="button" data-download-finance>Download period report</button>
     <button type="button" data-section="business-target">Sales targets</button>
     <button type="button" data-section="product-profit">Profit by product</button>
     <button type="button" data-section="expense-breakdown">Spending breakdown</button>
@@ -162,7 +163,7 @@ export function expensePage(data, esc, year, period){
       <label>Related product<select name="product_id"><option value="">General expense</option>
       ${data.products.map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
       <label class="expense-cost-toggle"><input type="checkbox" name="included_in_product_cost" aria-describedby="expense-cost-note"> Already included in product cost</label>
-      <button class="primary">Record expense</button>
+      <button class="primary" type="submit">Record expense</button><button type="button" id="cancel-expense-edit" hidden>Cancel edit</button>
       <small id="expense-cost-note">Select this if the amount is already accounted for in the product cost used to calculate profit.</small>
       <p class="form-error" role="alert"></p>
     </form>
@@ -187,7 +188,7 @@ export function expensePage(data, esc, year, period){
       <table><caption>Expense entries</caption><thead><tr><th>Expense</th><th>Category</th><th>Product</th><th>Date</th><th>Amount</th><th>Profit treatment</th><th>Actions</th></tr></thead><tbody>
       ${report.expenses.map(e => `<tr><td data-user-content>${esc(e.description)}</td><td>${esc(e.category ?? 'Uncategorized')}</td>
         <td>${e.product_id?productName(e.product_id):'—'}</td><td>${e.date}</td><td>${usd(e.amount)}</td>
-        <td>${e.included_in_product_cost?'Included in product cost':'Deducted separately'}</td><td><button data-delete-expense="${e.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="7">No recorded expenses this period.</td></tr>'}
+        <td>${e.included_in_product_cost?'Included in product cost':'Deducted separately'}</td><td><div class="expense-actions"><button type="button" data-edit-expense="${e.id}">Edit</button><button type="button" data-delete-expense="${e.id}">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="7">No recorded expenses this period.</td></tr>'}
       </tbody></table>
     </div>
   </section>`;
@@ -290,7 +291,7 @@ export function businessProfile(data, esc, year, period) {
   </section>
   <section class="card recent business-card">
     <div class="card-head"><div><h2>Profit & loss</h2><p>Based on paid sales, recorded expenses and inventory write-offs. ${currency} · ${esc(data.settings?.time_zone??'Africa/Cairo')}.</p></div>
-    ${periodControls(year,period)}</div>
+    <div class="report-toolbar">${periodControls(year,period)}<button type="button" data-download-finance>Download period report</button></div></div>
     <div class="metrics">
       ${metric('Sales revenue', usd(report.revenue), `${report.units} paid units`)}
       ${metric('Cost of goods sold', usd(report.cogs))}

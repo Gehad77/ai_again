@@ -63,26 +63,30 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
       client.release();
     }
   }
-  if (route === '/api/expenses' && req.method === 'POST') {
+  const expense = route.match(/^\/api\/expenses\/(\d{1,10})$/);
+  const expenseId = expense && Number(expense[1]) <= 2147483647 ? Number(expense[1]) : null;
+  const editingExpense = expenseId !== null && req.method === 'PATCH';
+  if ((route === '/api/expenses' && req.method === 'POST') || editingExpense) {
     const payload = await body(req);
-    let expense;
-    try { expense = expenseEntry(payload); } catch (error) { invalid(error.message); }
-    const {description, amount, date, category, product_id, included_in_product_cost} = expense;
+    let entry;
+    try { entry = expenseEntry(payload); } catch (error) { invalid(error.message); }
+    const fields=[entry.description,entry.amount,entry.date,entry.category,entry.product_id,entry.included_in_product_cost];
+    const returning='RETURNING id,description,amount,date::text,category,product_id,included_in_product_cost';
     try {
-      const result = await pool.query(
-        `INSERT INTO operating_expenses(description,amount,date,category,product_id,included_in_product_cost)
-         VALUES($1,$2,$3,$4,$5,$6) RETURNING id,description,amount,date::text,category,product_id,included_in_product_cost`,
-        [description, amount, date, category, product_id, included_in_product_cost]
-      );
-      return json(res, 201, result.rows[0]);
+      const result=editingExpense?
+        await pool.query(`UPDATE operating_expenses SET description=$1,amount=$2,date=$3,category=$4,
+          product_id=$5,included_in_product_cost=$6 WHERE id=$7 ${returning}`,[...fields,expenseId]):
+        await pool.query(`INSERT INTO operating_expenses(description,amount,date,category,product_id,included_in_product_cost)
+        VALUES($1,$2,$3,$4,$5,$6) ${returning}`,fields);
+      if(!result.rowCount)return json(res,404,{error:'Expense not found.'});
+      return json(res,editingExpense?200:201,result.rows[0]);
     } catch (error) {
       if (error.code === '23503') invalid('Choose an existing product.');
       throw error;
     }
   }
-  const expense = route.match(/^\/api\/expenses\/(\d{1,10})$/);
-  if (expense && Number(expense[1]) <= 2147483647 && req.method === 'DELETE') {
-    const result = await pool.query('DELETE FROM operating_expenses WHERE id=$1', [expense[1]]);
+  if (expenseId !== null && req.method === 'DELETE') {
+    const result = await pool.query('DELETE FROM operating_expenses WHERE id=$1', [expenseId]);
     return json(res, result.rowCount ? 200 : 404, result.rowCount ? {ok:true} : {error:'Expense not found.'});
   }
   if (route === '/api/targets' && req.method === 'PUT') {
