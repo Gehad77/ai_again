@@ -50,6 +50,12 @@ export async function initialize(){
  CREATE TABLE IF NOT EXISTS workspace_settings(
   id INTEGER PRIMARY KEY CHECK(id=1), currency TEXT NOT NULL DEFAULT 'USD'
  );
+ ALTER TABLE workspace_settings
+  ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Olive & Co.',
+  ADD COLUMN IF NOT EXISTS language TEXT,
+  ADD COLUMN IF NOT EXISTS time_zone TEXT NOT NULL DEFAULT 'Africa/Cairo',
+  ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER NOT NULL DEFAULT 10,
+  ADD COLUMN IF NOT EXISTS default_period TEXT NOT NULL DEFAULT 'month';
  CREATE TABLE IF NOT EXISTS social_threads(
   channel TEXT NOT NULL, account TEXT NOT NULL, sender TEXT NOT NULL,
   conversation_id INTEGER UNIQUE NOT NULL REFERENCES conversations(id),

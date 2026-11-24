@@ -1,5 +1,5 @@
 import {socialConfigured,socialWebhook} from './social.js';
-import {currencies} from './public/business-model.js';
+import {currencies,defaultSettings,timeZones} from './public/business-model.js';
 import { adminRecoveryStatus, resetWithAccessCode } from './owner-access-code.js';
 import { ownerEmail, recoveryEnabled, recover } from './owner-recovery.js';
 import http from 'node:http';
@@ -72,6 +72,29 @@ export const server=http.createServer(async(req,res)=>{
  if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
  }
+ if(route==='/api/settings'&&req.method==='PUT'){
+  const p=await body(req);
+  const name=typeof p?.name==='string'?p.name.trim():'';
+  if(!name||name.length>80||!['ar','en'].includes(p.language)||!timeZones.has(p.time_zone)||
+     !Number.isInteger(p.low_stock_threshold)||p.low_stock_threshold<0||p.low_stock_threshold>2147483647||
+     !['month','quarter','year'].includes(p.default_period)||!currencies.has(p.currency))invalid('Check the workspace settings.');
+  const client=await pool.connect();
+  try{
+   await client.query('BEGIN');
+   await client.query('INSERT INTO workspace_settings(id) VALUES(1) ON CONFLICT DO NOTHING');
+   const existing=(await client.query('SELECT currency FROM workspace_settings WHERE id=1 FOR UPDATE')).rows[0];
+   if(existing.currency!==p.currency&&p.confirm!==true){
+    await client.query('ROLLBACK');
+    return json(res,400,{error:'Confirm the currency change first.'});
+   }
+   await client.query(`UPDATE workspace_settings SET name=$1,language=$2,time_zone=$3,
+     low_stock_threshold=$4,default_period=$5,currency=$6 WHERE id=1`,
+     [name,p.language,p.time_zone,p.low_stock_threshold,p.default_period,p.currency]);
+   await client.query('COMMIT');
+   return json(res,200,{ok:true});
+  }catch(error){await client.query('ROLLBACK');throw error;}
+  finally{client.release();}
+ }
  if(route==='/api/settings/currency'&&req.method==='PUT'){
   const p=await body(req);
   if(!currencies.has(p?.currency)||p.confirm!==true)invalid('Choose a currency and confirm how existing amounts are interpreted.');
@@ -102,12 +125,13 @@ export const server=http.createServer(async(req,res)=>{
    COALESCE((SELECT json_agg(e ORDER BY e.date DESC,e.id DESC) FROM operating_expenses e), '[]') AS expenses,
    COALESCE((SELECT json_agg(t) FROM sales_targets t), '[]') AS targets,
    COALESCE((SELECT currency FROM workspace_settings WHERE id=1),'USD') AS currency,
+   (SELECT row_to_json(s) FROM workspace_settings s WHERE id=1) AS settings,
    COALESCE((SELECT json_agg(channels) FROM (
     SELECT t.channel, COUNT(DISTINCT t.conversation_id)::int AS conversations, COUNT(m.id)::int AS messages
     FROM social_threads t LEFT JOIN messages m ON m.conversation_id=t.conversation_id AND m.role='customer'
     GROUP BY t.channel
    ) channels),'[]') AS "socialActivity"`);
-  return json(res,200,{...data,workspace:'Olive & Co.',demo:process.env.SEED_DEMO==='1',socialConfigured:socialConfigured()});
+  return json(res,200,{...data,settings:data.settings??defaultSettings,workspace:data.settings?.name??defaultSettings.name,demo:process.env.SEED_DEMO==='1',socialConfigured:socialConfigured()});
  }
  if(route.match(/^\/api\/orders\/\d+\/confirm$/)&&req.method==='POST'){
  const id=Number(route.split('/')[3]);const p=await body(req);if(typeof p.unit_cost!=='number'||!Number.isFinite(p.unit_cost)||p.unit_cost<0||p.unit_cost>9999999999.99)invalid('Enter a valid unit cost.');

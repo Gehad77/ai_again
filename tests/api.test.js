@@ -51,6 +51,19 @@ test('website ordering is closed by default and owner currency persists', async(
  assert.equal((await (await fetch(base+'/api/overview')).json()).currency,'EGP');
 });
 
+test('workspace preferences save centrally and preserve the currency confirmation',async()=>{
+ const settings={name:'Cotton Works',language:'ar',currency:'EGP',time_zone:'Asia/Riyadh',
+  low_stock_threshold:4,default_period:'quarter'};
+ const save=(p,request=fetch)=>request(base+'/api/settings',{method:'PUT',body:JSON.stringify(p)});
+ assert.equal((await save(settings,rawFetch)).status,401);
+ assert.equal((await save({...settings,currency:'USD'})).status,400);
+ assert.equal((await save(settings)).status,200);
+ const {workspace,settings:saved}=await (await fetch(base+'/api/overview')).json();
+ assert.equal(workspace,'Cotton Works');
+ const {id,...preferences}=saved;
+ assert.deepEqual(preferences,settings);
+});
+
 test('signed social text reaches the inbox once per message',async()=>{
  process.env.META_APP_SECRET='test-meta-secret';
  process.env.META_VERIFY_TOKEN='test-verify-token';

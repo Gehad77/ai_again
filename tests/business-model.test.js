@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { expenseBreakdown, financials, pricingPlan, reportMargins } from '../public/business-model.js';
+import { defaultReportPeriod, expenseBreakdown, financials, profitGoal, pricingPlan, reportMargins } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -55,4 +55,17 @@ test('expense reporting groups custom categories and deducts production costs on
     {name:'Shipping',count:2,total:10},
     {name:'Uncategorized',count:1,total:5}
   ]);
+});
+
+test('profit goals use whole units and the selected reporting period',()=>{
+ const report={overhead:100,writeoffs:10,revenue:200,gross:50};
+ assert.deepEqual(profitGoal(report,40),{revenue:600,units:null});
+ assert.deepEqual(profitGoal(report,40,{price:30,unit_cost:13}),{revenue:270,units:9});
+ assert.equal(profitGoal(report,40,{price:10,unit_cost:null}),null);
+ const now=new Date('2026-03-31T22:30:00Z');
+ assert.equal(defaultReportPeriod({time_zone:'Africa/Cairo',default_period:'quarter'},now),'2026-Q2');
+ assert.equal(defaultReportPeriod({time_zone:'UTC',default_period:'quarter'},now),'2026-Q1');
+ const orders=[{quantity:1,unit_price:10,unit_cost:2,status:'Paid',date:now.toISOString()}];
+ assert.equal(financials({orders,settings:{time_zone:'Africa/Cairo'}},'2026-04').revenue,10);
+ assert.equal(financials({orders,settings:{time_zone:'UTC'}},'2026-04').revenue,0);
 });

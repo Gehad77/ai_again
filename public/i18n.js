@@ -7,6 +7,36 @@ Profile|ملف النشاط
 Analytics|التحليلات
 Integrations|ربط السوشيال
 Settings|الإعدادات
+Expenses|المصروفات
+Workspace preferences|تفضيلات مساحة العمل
+Business name|اسم النشاط
+Language|اللغة
+Report time zone|المنطقة الزمنية للتقارير
+Default report period|فترة التقرير الافتراضية
+Monthly|شهري
+Quarterly|ربع سنوي
+Yearly|سنوي
+Low-stock alert threshold|حد تنبيه انخفاض المخزون
+At or below the configured stock threshold|عند حد التنبيه المحدد أو أقل منه
+Save settings|حفظ الإعدادات
+Settings saved|تم حفظ الإعدادات
+Check the workspace settings.|راجعي بيانات الإعدادات.
+Confirm the currency change first.|أكدي تغيير العملة أولًا.
+Track spending by category and product.|تابعي الصرف حسب التصنيف والمنتج.
+Spending by product|الصرف حسب المنتج
+Purchases|المشتريات
+Profit target calculator|حاسبة هدف الربح
+Uses the selected period’s recorded expenses and write-offs. Enter zero to calculate break-even.|الحساب حسب مصروفات وتالف الفترة المختارة. اكتبي صفر لحساب نقطة التعادل.
+Desired net profit|صافي الربح المطلوب
+Margin source|مصدر هامش الربح
+Recorded sales margin|هامش المبيعات المسجّلة
+Calculate target|احسبي الهدف
+Select a product with a positive margin or record sales with a positive gross margin.|اختاري منتج بهامش ربح موجب أو سجّلي مبيعات بهامش ربح إجمالي موجب.
+Assumes all sales are for the selected product|على افتراض إن كل المبيعات من المنتج المختار
+Estimate at the recorded gross margin|تقدير حسب هامش الربح المسجّل
+Revenue still needed|الإيراد المتبقي لتحقيق الهدف
+Units needed|القطع المطلوبة
+Use as sales target|استخدامه كهدف مبيعات
 Workspace|مساحة العمل
 WORKSPACE|مساحة العمل
 Workspace owner|صاحب النشاط
@@ -326,7 +356,7 @@ export function translate(text){
  const match=value.match(/^(.*) \(([A-Z]{3})\)$/);
  if(match&&translations.has(match[1]))return text.replace(value,translations.get(match[1])+' ('+match[2]+')');
  const dynamic=[
-  [/^Based on paid sales, recorded expenses and inventory write-offs\. (.+) · Cairo time\.$/,(_,code)=>'الحساب بناءً على المبيعات المدفوعة والمصاريف وإهلاك المخزون. '+code+' · بتوقيت القاهرة.'],
+  [/^Based on paid sales, recorded expenses and inventory write-offs\. (.+) · (.+)\.$/,(_,code,zone)=>'الحساب بناءً على المبيعات المدفوعة والمصاريف وإهلاك المخزون. '+code+' · '+zone+'.'],
   [/^(\d+) paid units$/,(_,n)=>n+' قطعة مدفوعة'],
   [/^Recorded spending for (.+)\. Change the report period above to see another month, quarter, or year\.$/,(_,p)=>'المصروفات المسجّلة للفترة '+p+'. غيّري فترة التقرير لاختيار شهر أو ربع سنة أو سنة.'],
   [/^Gross margin (.+)$/,(_,n)=>'هامش الربح الإجمالي '+n],

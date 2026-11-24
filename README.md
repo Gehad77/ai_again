@@ -4,7 +4,7 @@ A responsive sales CRM prototype for businesses selling through WhatsApp, Instag
 
 ## Dashboard language, currency, and social inbox
 
-Use **العربية / English** to switch the interface. The browser remembers the language. **Settings → Business currency** saves the workspace currency in PostgreSQL. It changes how existing amounts are displayed and interpreted without exchange-rate conversion.
+Use **Settings → Workspace preferences** to save the business name, Arabic or English, currency, reporting time zone, default reporting period, and low-stock threshold in PostgreSQL. It changes how existing amounts are displayed and interpreted without exchange-rate conversion.
 
 The owner dashboard reads actual workspace records. The website ordering and signup routes are closed by default, and the hosted dashboard removes the browser demo and static sample activity. Existing records are retained. Demo seeding is available in local development and disabled in production.
 
@@ -98,4 +98,7 @@ In Render, open the web service and check **Environment → DATABASE_URL**. It i
 
 If email delivery is unavailable and you control the hosting environment, set `OWNER_EMAIL` to your intended owner email and `OWNER_ACCESS_CODE` to a fresh 32–128-character random value using only letters, digits, underscores, or hyphens. After deployment, open `/?recover=hosting`, enter the one-time code, and choose a password. The page shows which recovery setting needs attention when the code cannot be used. A successful reset updates the single owner, ends previous owner sessions, and opens the dashboard in the current browser. The same code cannot be reused. Remove `OWNER_ACCESS_CODE` from the hosting environment after completing the reset.
 
-The **Expense ledger** in **Business profile** tracks spending by category for the selected month, quarter, or year. Choose a category or type your own, then enter the amount, date, and optional related product. Select **Already included in product cost** only if the amount is already accounted for in product costs used for profit reporting. Such entries count toward total recorded spending, with no extra profit deduction. Existing expenses appear as **Uncategorized** and retain their original effect on profit.
+The **Expenses** page tracks spending by category and product for the selected month, quarter, or year. Choose a category or type your own, then enter the amount, date, and optional related product. Select **Already included in product cost** only if the amount is already accounted for in product costs used for profit reporting. Such entries count toward total recorded spending, with no extra profit deduction. Existing expenses appear as **Uncategorized** and retain their original effect on profit.
+
+
+In **Expenses → Profit target calculator**, enter the desired net profit and select either the recorded sales margin or the unit margin of a product. The estimate uses recorded operating expenses and inventory write-offs for the selected period. A monthly or quarterly result can prefill the sales target form for review and saving.

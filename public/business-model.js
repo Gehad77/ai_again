@@ -25,7 +25,7 @@ export function stockChange(product, input) {
 }
 
 export const expenseCategories = Object.freeze([
-  'Materials', 'Manufacturing', 'Marketing', 'Sales', 'Tools & subscriptions',
+  'Purchases', 'Materials', 'Manufacturing', 'Marketing', 'Sales', 'Tools & subscriptions',
   'Rent', 'Transportation', 'Shipping', 'Other'
 ]);
 
@@ -57,19 +57,36 @@ export function expenseBreakdown(expenses) {
     .map(row => ({...row,total:row.total / 100}));
 }
 
-const calendar = new Intl.DateTimeFormat('en-CA', {
-  timeZone:'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit'
+export const defaultSettings = Object.freeze({
+  name:'Olive & Co.', language:null, time_zone:'Africa/Cairo', low_stock_threshold:10, default_period:'month'
 });
-export const businessDate = (date = new Date()) => calendar.format(new Date(date));
+
+export const timeZones = new Set(['UTC', ...Intl.supportedValuesOf('timeZone')]);
+const calendars = new Map();
+export function businessDate(date = new Date(), timeZone = defaultSettings.time_zone) {
+  if (!calendars.has(timeZone)) {
+    calendars.set(timeZone, new Intl.DateTimeFormat('en-CA', {
+      timeZone, year:'numeric', month:'2-digit', day:'2-digit'
+    }));
+  }
+  return calendars.get(timeZone).format(new Date(date));
+}
+
+export function defaultReportPeriod(settings = defaultSettings, now = new Date()) {
+  const today = businessDate(now, settings.time_zone);
+  if (settings.default_period === 'year') return today.slice(0, 4);
+  return settings.default_period === 'quarter' ? quarterFor(today) : today.slice(0, 7);
+}
+
 export const quarterFor = date => date.slice(0, 4) + '-Q' + Math.ceil(Number(date.slice(5, 7)) / 3);
 
 export const isInPeriod = (date, period) => period.includes('-Q') ? quarterFor(date) === period : date.startsWith(period);
 
 export function financials(data, period) {
   const includes = date => isInPeriod(date, period);
-  const sales = data.orders.filter(o => o.status === 'Paid' && includes(businessDate(o.paid_at ?? o.date)));
+  const sales = data.orders.filter(o => o.status === 'Paid' && includes(businessDate(o.paid_at ?? o.date,data.settings?.time_zone)));
   const expenses = (data.expenses ?? []).filter(e => includes(e.date));
-  const losses = (data.movements ?? []).filter(m => m.kind === 'writeoff' && includes(businessDate(m.date)));
+  const losses = (data.movements ?? []).filter(m => m.kind === 'writeoff' && includes(businessDate(m.date,data.settings?.time_zone)));
   const cents = amount => Math.round(amount * 100);
   const revenue = sales.reduce((sum, o) => sum + o.quantity * cents(o.unit_price), 0);
   const cogs = sales.reduce((sum, o) => sum + o.quantity * cents(o.unit_cost), 0);
@@ -114,3 +131,19 @@ export function reportMargins(report) {
 export const currencies = new Set(Intl.supportedValuesOf('currency').filter(code =>
   new Intl.NumberFormat('en',{style:'currency',currency:code}).resolvedOptions().maximumFractionDigits<=2
 ));
+
+
+export function profitGoal(report, desiredProfit, product) {
+  if (!isMoney(desiredProfit)) return null;
+  const required = Math.round(report.overhead * 100) + Math.round(report.writeoffs * 100) + Math.round(desiredProfit * 100);
+  if (product) {
+    if (product.unit_cost == null) return null;
+    const price = Math.round(product.price * 100);
+    const contribution = price - Math.round(product.unit_cost * 100);
+    if (contribution <= 0) return null;
+    const units = Math.ceil(required / contribution);
+    return {revenue:units * price / 100,units};
+  }
+  if (report.revenue <= 0 || report.gross <= 0) return null;
+  return {revenue:Math.ceil(required * report.revenue / report.gross) / 100,units:null};
+}

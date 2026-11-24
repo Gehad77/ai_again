@@ -26,10 +26,15 @@
 #business-expense .expense-cost-toggle input { width:auto; }
 #expense-cost-note { flex-basis:100%; }
 .business-card table caption { text-align:start; padding:16px 20px 8px; font-weight:600; }
-#language-switch { position:fixed; z-index:5; inset-block-end:16px; inset-inline-end:16px; background:#fff; color:#173a2b; box-shadow:0 2px 8px #172c201c; }
 [dir="rtl"] .sidebar { inset:0 0 0 auto; border-left:1px solid var(--border); border-right:0; }
 [dir="rtl"] .main { margin-left:0; margin-right:236px; }
 [dir="rtl"] th, [dir="rtl"] td { text-align:start; }
 [dir="rtl"] .bubble { text-align:start; }
 @media(max-width:1100px){[dir="rtl"] .main{margin-right:205px}}
 @media(max-width:800px){[dir="rtl"] .main{margin-right:75px}}
+
+#workspace-form { align-items:end; }
+#workspace-form select, #workspace-form input:not([type="checkbox"]) { min-height:40px; max-width:100%; }
+#currency-change-note { flex-basis:100%; }
+#currency-change-note small { display:block; margin-top:8px; }
+#profit-goal-result:empty, #workspace-form .form-error:empty, #profit-goal .form-error:empty { display:none; }
