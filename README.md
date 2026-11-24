@@ -2,6 +2,14 @@
 
 A responsive sales CRM prototype for businesses selling through WhatsApp, Instagram, and Messenger.
 
+## Dashboard language, currency, and social inbox
+
+Use **العربية / English** to switch the interface. The browser remembers the language. **Settings → Business currency** saves the workspace currency in PostgreSQL. It changes how existing amounts are displayed and interpreted without exchange-rate conversion.
+
+The owner dashboard reads actual workspace records. The website ordering and signup routes are closed by default, and the hosted dashboard removes the browser demo and static sample activity. Existing records are retained. Demo seeding is available in local development and disabled in production.
+
+To receive texts from Meta, set a Render secret `META_APP_SECRET` from your Meta app and define a strong private `META_VERIFY_TOKEN`. In Meta's product-specific webhook settings, use the address shown under **Integrations**, ending in `/api/social/webhook`, and the same verification token. Connect your WhatsApp Business number, Instagram professional account, or Facebook Page with the applicable permissions, then subscribe it to message events. The inbox shows signed inbound text and keeps the original message language. Integrations shows the first messages once received and reports counts. Outbound messages and media are outside this integration.
+
 ## Run
 
 Requires Node.js 24 or newer and PostgreSQL 17 (Docker Compose is provided). Install packages with `npm ci`.

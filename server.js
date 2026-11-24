@@ -1,3 +1,5 @@
+import {socialConfigured,socialWebhook} from './social.js';
+import {currencies} from './public/business-model.js';
 import { adminRecoveryStatus, resetWithAccessCode } from './owner-access-code.js';
 import { ownerEmail, recoveryEnabled, recover } from './owner-recovery.js';
 import http from 'node:http';
@@ -20,9 +22,11 @@ const ownerCookie=token=>`relay_session=${token}; HttpOnly; SameSite=Strict; Pat
 export const server=http.createServer(async(req,res)=>{
  try {
  const url=new URL(req.url,'http://localhost'); const route=url.pathname;
+ if(route==='/api/social/webhook')return socialWebhook(req,res,url,json);
  if(route.startsWith('/api/')){
  res.setHeader('Cache-Control','no-store');
  if(!['GET','HEAD'].includes(req.method)&&req.headers.origin&&req.headers.origin!==`http://${req.headers.host}`&&req.headers.origin!==`https://${req.headers.host}`)return json(res,403,{error:'Invalid request origin'});
+ if(route.startsWith('/api/shop/')&&process.env.ENABLE_LEGACY_SHOP!=='1')return json(res,410,{error:'Website ordering is closed.'});
  if(await customerRoutes(req,res,route,{pool,body,invalid,json,scrypt,digest,randomBytes,timingSafeEqual}))return;
  const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('relay_session='))?.slice(14)||'';
  const signedIn=!!(await pool.query('SELECT token FROM sessions WHERE token=$1 AND expires_at>NOW()',[digest(cookie)])).rowCount;
@@ -68,6 +72,13 @@ export const server=http.createServer(async(req,res)=>{
  if(route==='/api/auth/signout'&&req.method==='POST'){await pool.query('DELETE FROM sessions WHERE token=$1',[digest(cookie)]);res.setHeader('Set-Cookie','relay_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return json(res,200,{ok:true});}
  if(!signedIn)return json(res,401,{error:'Please sign in.'});
  }
+ if(route==='/api/settings/currency'&&req.method==='PUT'){
+  const p=await body(req);
+  if(!currencies.has(p?.currency)||p.confirm!==true)invalid('Choose a currency and confirm how existing amounts are interpreted.');
+  await pool.query(`INSERT INTO workspace_settings(id,currency) VALUES(1,$1)
+   ON CONFLICT(id) DO UPDATE SET currency=EXCLUDED.currency`,[p.currency]);
+  return json(res,200,{ok:true});
+ }
  if(route==='/api/customers'&&req.method==='GET'){
   const {rows}=await pool.query(`SELECT id,name,email,conversation_id,registered_at FROM customers ORDER BY id DESC`);
   return json(res,200,{customers:rows});
@@ -78,7 +89,7 @@ export const server=http.createServer(async(req,res)=>{
  const p=await body(req);
  if(!Number.isSafeInteger(p.product_id)||!Number.isSafeInteger(p.quantity)||p.quantity<1||p.quantity>2147483647||![p.unit_price,p.unit_cost].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=9999999999.99)||!['WhatsApp','Instagram','Messenger','Website'].includes(p.channel)||!['Paid','Pending','Cancelled','Refunded'].includes(p.status))invalid('Enter valid order details.');
  const c=await pool.connect();try{await c.query('BEGIN');if(p.conversation_id!==undefined&&(!Number.isSafeInteger(p.conversation_id)||!(await c.query('SELECT id FROM conversations WHERE id=$1',[p.conversation_id])).rowCount))invalid('Choose an existing conversation.');const product=(await c.query('SELECT * FROM products WHERE id=$1 FOR UPDATE',[p.product_id])).rows[0];if(!product)invalid('Choose an existing product.');if(p.status==='Paid'){if(product.stock<p.quantity)invalid('Not enough stock for this paid order.');}
- const result=await c.query("INSERT INTO orders(id,product_id,quantity,unit_price,unit_cost,channel,status,date,paid_at) VALUES(nextval('order_ids'),$1,$2,$3,$4,$5,$6,NOW(),CASE WHEN $6='Paid' THEN NOW() END) RETURNING *",[p.product_id,p.quantity,p.unit_price,p.unit_cost,p.channel,p.status]);if(p.status==='Paid')await recordSale(c,result.rows[0],product);if(p.conversation_id!==undefined){await c.query('INSERT INTO conversation_orders VALUES($1,$2,$3)',[result.rows[0].id,p.conversation_id,randomBytes(24).toString('hex')]);await c.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'agent',$2)",[p.conversation_id,`Order #${result.rows[0].id}: ${p.quantity} × ${product.name}, total $${(p.quantity*p.unit_price).toFixed(2)}. Status: ${p.status}.`]);}await c.query('COMMIT');return json(res,201,result.rows[0]);}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+ const result=await c.query("INSERT INTO orders(id,product_id,quantity,unit_price,unit_cost,channel,status,date,paid_at) VALUES(nextval('order_ids'),$1,$2,$3,$4,$5,$6,NOW(),CASE WHEN $6='Paid' THEN NOW() END) RETURNING *",[p.product_id,p.quantity,p.unit_price,p.unit_cost,p.channel,p.status]);if(p.status==='Paid')await recordSale(c,result.rows[0],product);if(p.conversation_id!==undefined){await c.query('INSERT INTO conversation_orders VALUES($1,$2,$3)',[result.rows[0].id,p.conversation_id,randomBytes(24).toString('hex')]);await c.query("INSERT INTO messages(conversation_id,role,body) VALUES($1,'agent',$2)",[p.conversation_id,`Order #${result.rows[0].id}: ${p.quantity} × ${product.name}, total ${(p.quantity*p.unit_price).toFixed(2)} ${(await c.query('SELECT currency FROM workspace_settings WHERE id=1')).rows[0]?.currency??'USD'}. Status: ${p.status}.`]);}await c.query('COMMIT');return json(res,201,result.rows[0]);}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }
  if(route==='/api/overview' && req.method==='GET'){
   const {rows:[data]}=await pool.query(`SELECT
@@ -89,8 +100,14 @@ export const server=http.createServer(async(req,res)=>{
    ) linked), '[]') AS orders,
    COALESCE((SELECT json_agg(m ORDER BY m.id DESC) FROM stock_movements m), '[]') AS movements,
    COALESCE((SELECT json_agg(e ORDER BY e.date DESC,e.id DESC) FROM operating_expenses e), '[]') AS expenses,
-   COALESCE((SELECT json_agg(t) FROM sales_targets t), '[]') AS targets`);
-  return json(res,200,{...data,workspace:'Olive & Co.',demo:process.env.SEED_DEMO==='1'});
+   COALESCE((SELECT json_agg(t) FROM sales_targets t), '[]') AS targets,
+   COALESCE((SELECT currency FROM workspace_settings WHERE id=1),'USD') AS currency,
+   COALESCE((SELECT json_agg(channels) FROM (
+    SELECT t.channel, COUNT(DISTINCT t.conversation_id)::int AS conversations, COUNT(m.id)::int AS messages
+    FROM social_threads t LEFT JOIN messages m ON m.conversation_id=t.conversation_id AND m.role='customer'
+    GROUP BY t.channel
+   ) channels),'[]') AS "socialActivity"`);
+  return json(res,200,{...data,workspace:'Olive & Co.',demo:process.env.SEED_DEMO==='1',socialConfigured:socialConfigured()});
  }
  if(route.match(/^\/api\/orders\/\d+\/confirm$/)&&req.method==='POST'){
  const id=Number(route.split('/')[3]);const p=await body(req);if(typeof p.unit_cost!=='number'||!Number.isFinite(p.unit_cost)||p.unit_cost<0||p.unit_cost>9999999999.99)invalid('Enter a valid unit cost.');
@@ -103,7 +120,11 @@ export const server=http.createServer(async(req,res)=>{
  if(req.method==='PATCH'&&!match[2]){let body='';for await(const c of req){body+=c;if(body.length>1000)return json(res,413,{error:'Request too large'});}let p;try{p=JSON.parse(body);}catch{return json(res,400,{error:'Invalid JSON'});}if(!['Needs reply','AI handling','Converted','Inactive'].includes(p.status))return json(res,400,{error:'Invalid status'});await pool.query('UPDATE conversations SET status=$1 WHERE id=$2',[p.status,id]);return json(res,200,{ok:true});}}
  if(route.startsWith('/api/'))return json(res,404,{error:'Not found'});
  if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
- const files={'/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
+ if(['/shop','/shop/','/shop.html'].includes(route)&&process.env.ENABLE_LEGACY_SHOP!=='1'){
+  res.writeHead(410,{'Content-Type':'text/plain; charset=utf-8'});
+  return res.end('Website ordering is closed. / الطلبات من الموقع متوقفة.');
+ }
+ const files={'/i18n.js':'i18n.js','/shop':'shop.html','/shop/':'shop.html','/shop.html':'shop.html','/shop.js':'shop.js','/':'index.html','/app.js':'app.js','/style.css':'style.css','/analytics.js':'analytics.js','/business-model.js':'business-model.js','/business-view.js':'business-view.js','/demo.js':'demo.js','/demo-data.json':'demo-data.json'};if(!files[route])return json(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':route.endsWith('.json')?'application/json':route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html'});res.end(readFileSync(path.join(root,'public',files[route])));
  }catch(e){console.error('Request failed:',e.code||e.name);json(res,e.status||500,{error:e.status?e.message:'Something went wrong'});}
 });
 if(process.env.NODE_ENV!=='test')server.listen(Number(process.env.PORT||3000),'0.0.0.0',()=>console.log('Relay CRM listening on port '+(process.env.PORT||3000)));

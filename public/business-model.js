@@ -110,3 +110,7 @@ export function reportMargins(report) {
       ? Math.ceil(-report.net * report.revenue / report.gross * 100) / 100 : null
   };
 }
+
+export const currencies = new Set(Intl.supportedValuesOf('currency').filter(code =>
+  new Intl.NumberFormat('en',{style:'currency',currency:code}).resolvedOptions().maximumFractionDigits<=2
+));

@@ -1,5 +1,6 @@
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
 import pg from 'pg';
 if(!process.env.DATABASE_URL)throw Error('API tests require a running PostgreSQL database and DATABASE_URL.');
 const admin=new pg.Pool({connectionString:process.env.DATABASE_URL});
@@ -41,7 +42,44 @@ test('owner access, product creation and transactional order stock',async()=>{
  assert.equal((await rawFetch(base+'/api/overview',{headers:{cookie:login.headers.get('set-cookie').split(';')[0]}})).status,401);
 });
 
-test('customer chat orders are private, priced by server, and confirmed once',async()=>{
+test('website ordering is closed by default and owner currency persists', async()=>{
+ assert.equal((await rawFetch(base+'/shop')).status,410);
+ assert.equal((await rawFetch(base+'/api/shop/signup',{method:'POST',body:'{}'})).status,410);
+ const options={method:'PUT',body:JSON.stringify({currency:'EGP',confirm:true})};
+ assert.equal((await rawFetch(base+'/api/settings/currency',options)).status,401);
+ assert.equal((await fetch(base+'/api/settings/currency',options)).status,200);
+ assert.equal((await (await fetch(base+'/api/overview')).json()).currency,'EGP');
+});
+
+test('signed social text reaches the inbox once per message',async()=>{
+ process.env.META_APP_SECRET='test-meta-secret';
+ process.env.META_VERIFY_TOKEN='test-verify-token';
+ const endpoint=base+'/api/social/webhook';
+ const body=JSON.stringify({object:'page',entry:[{id:'123',messaging:[
+  {sender:{id:'456'},message:{mid:'message-1',text:'مرحبا'}},
+  {sender:{id:'456'},message:{mid:'message-2',text:'How much?'}},
+  {sender:{id:'456'},message:{mid:'echo',text:'Do not import',is_echo:true}}
+ ]}]});
+ try{
+  const verify=await rawFetch(endpoint+'?hub.mode=subscribe&hub.challenge=42&hub.verify_token=test-verify-token');
+  assert.equal(await verify.text(),'42');
+  assert.equal((await rawFetch(endpoint,{method:'POST',body})).status,403);
+  const signature='sha256='+createHmac('sha256',process.env.META_APP_SECRET).update(body).digest('hex');
+  const post=()=>rawFetch(endpoint,{method:'POST',body,headers:{'x-hub-signature-256':signature}});
+  assert.deepEqual((await Promise.all([post(),post()])).map(r=>r.status),[200,200]);
+  const data=await (await fetch(base+'/api/overview')).json();
+  assert.deepEqual(data.socialActivity,[{channel:'Messenger',conversations:1,messages:2}]);
+  const thread=data.conversations.find(c=>c.name==='Messenger · 456');
+  assert.deepEqual((await (await fetch(base+'/api/conversations/'+thread.id)).json()).map(m=>m.body),['مرحبا','How much?']);
+ }finally{
+  delete process.env.META_APP_SECRET;
+  delete process.env.META_VERIFY_TOKEN;
+ }
+});
+
+test('customer chat orders are private, priced by server, and confirmed once',async t=>{
+ process.env.ENABLE_LEGACY_SHOP='1';
+ t.after(()=>{delete process.env.ENABLE_LEGACY_SHOP;});
  const request=(path,data,cookie)=>rawFetch(base+'/api/shop/'+path,{method:data?'POST':'GET',headers:cookie?{cookie}:{},...(data?{body:JSON.stringify(data)}:{})});
  assert.equal((await request('chat')).status,401);
  const signup=await request('signup',{name:'Alex Buyer',email:'buyer@example.com',password:'customer-password-123'});assert.equal(signup.status,200);const buyerCookie=signup.headers.get('set-cookie').split(';')[0];
@@ -107,11 +145,12 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  assert.equal(cotton.product_id,id);
  assert.equal(cotton.included_in_product_cost,true);
  assert.deepEqual(data.targets.map(t=>[t.period,t.amount]).sort(), [['2026-11',50],['2026-Q4',100]]);
- const catalog = await (await rawFetch(base+'/api/shop/products')).json();
- assert(!('unit_cost' in catalog.products.find(p=>p.id===id)));
+ assert.equal((await rawFetch(base+'/api/shop/products')).status,410);
 });
 
-test('registered customer accounts are visible only to the owner', async () => {
+test('registered customer accounts are visible only to the owner', async t => {
+ process.env.ENABLE_LEGACY_SHOP='1';
+ t.after(()=>{delete process.env.ENABLE_LEGACY_SHOP;});
  const endpoint = base + '/api/customers';
  assert.equal((await rawFetch(endpoint)).status,401);
  const signup = await rawFetch(base+'/api/shop/signup',{method:'POST',body:JSON.stringify({

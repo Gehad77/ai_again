@@ -47,10 +47,22 @@ export async function initialize(){
   ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Uncategorized',
   ADD COLUMN IF NOT EXISTS included_in_product_cost BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS product_id INTEGER REFERENCES products(id);
+ CREATE TABLE IF NOT EXISTS workspace_settings(
+  id INTEGER PRIMARY KEY CHECK(id=1), currency TEXT NOT NULL DEFAULT 'USD'
+ );
+ CREATE TABLE IF NOT EXISTS social_threads(
+  channel TEXT NOT NULL, account TEXT NOT NULL, sender TEXT NOT NULL,
+  conversation_id INTEGER UNIQUE NOT NULL REFERENCES conversations(id),
+  PRIMARY KEY(channel, account, sender)
+ );
+ CREATE TABLE IF NOT EXISTS social_deliveries(
+  channel TEXT NOT NULL, account TEXT NOT NULL, message_id TEXT NOT NULL,
+  PRIMARY KEY(channel, account, message_id)
+ );
  CREATE TABLE IF NOT EXISTS sales_targets(
   period TEXT PRIMARY KEY, amount NUMERIC(12,2) NOT NULL CHECK(amount>=0)
  );`);
- if(process.env.SEED_DEMO==='1'){
+ if(process.env.SEED_DEMO==='1'&&process.env.NODE_ENV!=='production'){
  const d=JSON.parse(readFileSync(new URL('./public/demo-data.json',import.meta.url),'utf8'));
  for(const x of d.overview.conversations)await c.query('INSERT INTO conversations VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',[x.id,x.name,x.initials,x.channel,x.product,x.status,x.intent,x.color]);
  for(const x of d.overview.products)await c.query('INSERT INTO products VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING',[x.id,x.name,x.category,x.price,x.stock,x.emoji,x.color]);

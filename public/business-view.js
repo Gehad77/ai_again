@@ -1,9 +1,9 @@
+import { currency, formatMoney, locale } from './i18n.js';
 import { businessDate, financials, expenseBreakdown, expenseCategories, pricingPlan, quarterFor, reportMargins } from './business-model.js';
 
-const money = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'});
-const usd = amount => money.format(amount);
-const percentage = new Intl.NumberFormat('en-US', {style:'percent', maximumFractionDigits:1});
-const marginLabel = margin => margin === null ? '—' : percentage.format(margin);
+const usd = formatMoney;
+const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
+const marginLabel = margin => margin === null ? '—' : percentage().format(margin);
 const amountField = 'type="number" min="0" max="9999999999.99" step="0.01"';
 const kinds = {opening:'Opening stock', sale:'Paid sale', restock:'Restock', correction:'Correction', writeoff:'Write-off'};
 const metric = (label, value, caption = '') => `
@@ -27,7 +27,7 @@ export function warehouseSummary(data, esc) {
     </div>
     <details class="card warehouse-detail"><summary>View stock by product</summary>
       <div class="table-wrap"><table><thead><tr><th>Product</th><th>Available units</th></tr></thead><tbody>
-      ${data.products.map(p => `<tr><td>${esc(p.name)}</td><td>${p.stock}${p.stock <= 10 ? ' <span class="badge amber">Low stock</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="2">No products in the warehouse.</td></tr>'}
+      ${data.products.map(p => `<tr><td data-user-content>${esc(p.name)}</td><td>${p.stock}${p.stock <= 10 ? ' <span class="badge amber">Low stock</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="2">No products in the warehouse.</td></tr>'}
       </tbody></table></div>
     </details>
   </section>`;
@@ -56,11 +56,11 @@ function pricingCalculator(products, esc){
     <h2>Pricing calculator</h2><p>Estimate a selling price and how many units would cover your planned expenses.</p></div></div>
     <form id="pricing-calculator" class="business-form">
       <label>Product <select name="product"><option value="">Manual estimate</option>
-        ${products.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
-      <label>Product cost per unit ($)<input name="cost" ${amountField} required></label>
-      <label>Other cost per unit ($)<input name="extra" ${amountField} value="0" required></label>
+        ${products.map(p => `<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      <label>Product cost per unit (${currency})<input name="cost" ${amountField} required></label>
+      <label>Other cost per unit (${currency})<input name="extra" ${amountField} value="0" required></label>
       <label>Target margin (%)<input name="margin" type="number" step="0.01" min="0.01" max="99.99" value="30" required></label>
-      <label>Planned fixed expenses ($)<input name="fixed" ${amountField} value="0" required></label>
+      <label>Planned fixed expenses (${currency})<input name="fixed" ${amountField} value="0" required></label>
       <button class="primary">Calculate</button>
       <p class="form-error" role="alert"></p>
     </form>
@@ -119,14 +119,14 @@ export function businessProfile(data, esc, year, period) {
     <div class="card-head"><div><h2>Warehouse</h2><p>Recorded stock cost ${usd(costValue)}${unknown ? ` · ${unknown} stocked products need a unit cost` : ''}</p></div>
     <div><button data-create="order">Record sale</button> <button class="primary" data-create="product">Add product</button></div></div>
     <div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Selling price</th><th>Unit cost</th><th>Actions</th></tr></thead><tbody>
-    ${data.products.map(p => `<tr><td><b>${esc(p.name)}</b><small>${esc(p.category)}</small></td>
+    ${data.products.map(p => `<tr><td><b data-user-content>${esc(p.name)}</b><small>${esc(p.category)}</small></td>
       <td>${p.stock}${p.stock <= 10 ? ' <span class="badge amber">Low stock</span>' : ''}</td>
       <td>${usd(p.price)}</td><td>${p.unit_cost == null ? 'Unset' : usd(p.unit_cost)}</td>
       <td><button data-edit-product="${p.id}">Edit product</button> <button data-stock-product="${p.id}">Adjust stock</button></td></tr>`).join('') || '<tr><td colspan="5">Add your first product to start tracking stock.</td></tr>'}
     </tbody></table></div>
   </section>
   <section class="card recent business-card">
-    <div class="card-head"><div><h2>Profit & loss</h2><p>Based on paid sales, recorded expenses and inventory write-offs. USD · Cairo time.</p></div>
+    <div class="card-head"><div><h2>Profit & loss</h2><p>Based on paid sales, recorded expenses and inventory write-offs. ${currency} · Cairo time.</p></div>
     <div class="business-controls"><label>Year <input id="business-year" type="number" min="1000" max="9999" value="${year}"></label>
     <label>Report period <select id="business-period">${periods.map(p => `<option ${p === period ? 'selected' : ''}>${p}</option>`).join('')}</select></label></div></div>
     <div class="metrics">
@@ -152,10 +152,10 @@ export function businessProfile(data, esc, year, period) {
       <label>Category<input name="category" list="expense-categories" maxlength="60" placeholder="Choose or type a category" required></label>
       <datalist id="expense-categories">${[...expenseCategories,...categories].map(name=>`<option value="${esc(name)}"></option>`).join('')}</datalist>
       <label>Expense description<input name="description" maxlength="160" placeholder="e.g. Cotton for T-shirts" required></label>
-      <label>Amount ($)<input name="amount" ${amountField} required></label>
+      <label>Amount (${currency})<input name="amount" ${amountField} required></label>
       <label>Expense date<input name="date" type="date" value="${today}" required></label>
       <label>Related product<select name="product_id"><option value="">General expense</option>
-      ${data.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      ${data.products.map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
       <label class="expense-cost-toggle"><input type="checkbox" name="included_in_product_cost" aria-describedby="expense-cost-note"> Already included in product cost</label>
       <button class="primary">Record expense</button>
       <small id="expense-cost-note">Select this if the amount is already accounted for in the product cost used to calculate profit.</small>
@@ -168,7 +168,7 @@ export function businessProfile(data, esc, year, period) {
     </div>
     <div class="table-wrap">
       <table><caption>Expense entries</caption><thead><tr><th>Expense</th><th>Category</th><th>Product</th><th>Date</th><th>Amount</th><th>Profit treatment</th><th>Actions</th></tr></thead><tbody>
-      ${report.expenses.map(e => `<tr><td>${esc(e.description)}</td><td>${esc(e.category ?? 'Uncategorized')}</td>
+      ${report.expenses.map(e => `<tr><td data-user-content>${esc(e.description)}</td><td>${esc(e.category ?? 'Uncategorized')}</td>
         <td>${e.product_id?productName(e.product_id):'—'}</td><td>${e.date}</td><td>${usd(e.amount)}</td>
         <td>${e.included_in_product_cost?'Included in product cost':'Deducted separately'}</td><td><button data-delete-expense="${e.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="7">No recorded expenses this period.</td></tr>'}
       </tbody></table>
@@ -187,7 +187,7 @@ ${pricingCalculator(data.products,esc)}
     }).join('')}</div>
     <form id="business-target" class="business-form">
       <label>Target period<select name="period">${[...quarters, ...months].map(p => `<option ${p === (period.length > 4 ? period : month) ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
-      <label>Revenue target ($)<input name="amount" ${amountField} required></label>
+      <label>Revenue target (${currency})<input name="amount" ${amountField} required></label>
       <button class="primary">Save target</button><p class="form-error" role="alert"></p>
     </form>
   </section>
