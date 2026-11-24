@@ -81,6 +81,12 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  const order = await sale.json();
  const expense = await send('/api/expenses','POST',{description:'Warehouse rent',amount:12.5,date:'2026-11-22'});
  assert.equal(expense.status, 201);
+ const categorized = await send('/api/expenses','POST',{description:'Cotton',amount:6.5,date:'2026-11-22',
+  category:'  Custom  supplies ',product_id:id,included_in_product_cost:true});
+ assert.equal(categorized.status,201);
+ assert.equal((await categorized.json()).category,'Custom supplies');
+ assert.equal((await send('/api/expenses','POST',{description:'Missing product',amount:1,date:'2026-11-22',
+  category:'Shipping',product_id:2147483647})).status,400);
  assert.equal((await send('/api/expenses','POST',{description:'Invalid date',amount:12.5,date:'2026-02-30'})).status, 400);
  for (const period of ['2026-11','2026-Q4']) {
   assert.equal((await send('/api/targets','PUT',{period,amount:50})).status, 200);
@@ -96,6 +102,10 @@ test('warehouse adjustments, paid sales, and business settings persist together'
  assert.equal(movements[0].order_id, order.id);
  assert.equal(movements[2].unit_cost, 8);
  assert.equal(data.expenses.find(e=>e.description==='Warehouse rent').date, '2026-11-22');
+ assert.equal(data.expenses.find(e=>e.description==='Warehouse rent').category,'Uncategorized');
+ const cotton=data.expenses.find(e=>e.description==='Cotton');
+ assert.equal(cotton.product_id,id);
+ assert.equal(cotton.included_in_product_cost,true);
  assert.deepEqual(data.targets.map(t=>[t.period,t.amount]).sort(), [['2026-11',50],['2026-Q4',100]]);
  const catalog = await (await rawFetch(base+'/api/shop/products')).json();
  assert(!('unit_cost' in catalog.products.find(p=>p.id===id)));

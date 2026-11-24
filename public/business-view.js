@@ -1,4 +1,4 @@
-import { businessDate, financials, pricingPlan, quarterFor, reportMargins } from './business-model.js';
+import { businessDate, financials, expenseBreakdown, expenseCategories, pricingPlan, quarterFor, reportMargins } from './business-model.js';
 
 const money = new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'});
 const usd = amount => money.format(amount);
@@ -102,6 +102,9 @@ export function businessProfile(data, esc, year, period) {
   const quarter = quarterFor(today);
   const report = financials(data, period);
   const margins = reportMargins(report);
+  const categories = expenseBreakdown((data.expenses ?? [])).map(row => row.name)
+    .filter(name => name !== 'Uncategorized' && !expenseCategories.includes(name));
+  const breakdown = expenseBreakdown(report.expenses);
   const months = Array.from({length:12}, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const quarters = Array.from({length:4}, (_, i) => `${year}-Q${i+1}`);
   const periods = [String(year), ...quarters, ...months];
@@ -137,15 +140,39 @@ export function businessProfile(data, esc, year, period) {
          margins.revenueToBreakEven === null || (!report.revenue && !report.net) ? '—' : usd(margins.revenueToBreakEven),
          margins.revenueToBreakEven === null ? 'Requires sales with a positive gross margin' : 'Estimate at the same gross margin and expenses')}
     </div>
+  </section>
+  <section class="card recent business-card">
+    <div class="card-head"><div><h2>Expense ledger</h2><p>Recorded spending for ${period}. Change the report period above to see another month, quarter, or year.</p></div></div>
+    <div class="metrics">
+      ${metric('Total recorded spending',usd(report.recordedExpenses))}
+      ${metric('Already in product costs',usd(report.includedCosts))}
+      ${metric('Expenses deducted separately',usd(report.overhead))}
+    </div>
     <form id="business-expense" class="business-form">
-      <label>Expense description<input name="description" maxlength="160" required></label>
+      <label>Category<input name="category" list="expense-categories" maxlength="60" placeholder="Choose or type a category" required></label>
+      <datalist id="expense-categories">${[...expenseCategories,...categories].map(name=>`<option value="${esc(name)}"></option>`).join('')}</datalist>
+      <label>Expense description<input name="description" maxlength="160" placeholder="e.g. Cotton for T-shirts" required></label>
       <label>Amount ($)<input name="amount" ${amountField} required></label>
       <label>Expense date<input name="date" type="date" value="${today}" required></label>
-      <button class="primary">Record expense</button><p class="form-error" role="alert"></p>
+      <label>Related product<select name="product_id"><option value="">General expense</option>
+      ${data.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      <label class="expense-cost-toggle"><input type="checkbox" name="included_in_product_cost" aria-describedby="expense-cost-note"> Already included in product cost</label>
+      <button class="primary">Record expense</button>
+      <small id="expense-cost-note">Select this if the amount is already accounted for in the product cost used to calculate profit.</small>
+      <p class="form-error" role="alert"></p>
     </form>
-    <div class="table-wrap"><table><thead><tr><th>Expense</th><th>Date</th><th>Amount</th><th>Actions</th></tr></thead><tbody>
-      ${report.expenses.map(e => `<tr><td>${esc(e.description)}</td><td>${e.date}</td><td>${usd(e.amount)}</td><td><button data-delete-expense="${e.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="4">No recorded expenses this period.</td></tr>'}
-    </tbody></table></div>
+    <div class="table-wrap">
+      <table><caption>Spending by category</caption><thead><tr><th>Category</th><th>Entries</th><th>Total spent</th></tr></thead><tbody>
+      ${breakdown.map(row=>`<tr><td>${esc(row.name)}</td><td>${row.count}</td><td>${usd(row.total)}</td></tr>`).join('') || '<tr><td colspan="3">No recorded expenses this period.</td></tr>'}
+      </tbody></table>
+    </div>
+    <div class="table-wrap">
+      <table><caption>Expense entries</caption><thead><tr><th>Expense</th><th>Category</th><th>Product</th><th>Date</th><th>Amount</th><th>Profit treatment</th><th>Actions</th></tr></thead><tbody>
+      ${report.expenses.map(e => `<tr><td>${esc(e.description)}</td><td>${esc(e.category ?? 'Uncategorized')}</td>
+        <td>${e.product_id?productName(e.product_id):'—'}</td><td>${e.date}</td><td>${usd(e.amount)}</td>
+        <td>${e.included_in_product_cost?'Included in product cost':'Deducted separately'}</td><td><button data-delete-expense="${e.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="7">No recorded expenses this period.</td></tr>'}
+      </tbody></table>
+    </div>
   </section>
 ${pricingCalculator(data.products,esc)}
   <section class="card recent business-card">

@@ -22,3 +22,7 @@
 .starter-steps small { margin-inline-start:8px; color:var(--muted); }
 #business-warehouse, #business-expense, #business-target { scroll-margin-top:90px; }
 #pricing-result:empty, #pricing-calculator .form-error:empty { display:none; }
+#business-expense .expense-cost-toggle { display:flex; align-items:center; min-height:40px; }
+#business-expense .expense-cost-toggle input { width:auto; }
+#expense-cost-note { flex-basis:100%; }
+.business-card table caption { text-align:start; padding:16px 20px 8px; font-weight:600; }

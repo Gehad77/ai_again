@@ -24,6 +24,39 @@ export function stockChange(product, input) {
   return {kind, delta, note: note.trim(), stock_after, unit_cost: product.unit_cost ?? null};
 }
 
+export const expenseCategories = Object.freeze([
+  'Materials', 'Manufacturing', 'Marketing', 'Sales', 'Tools & subscriptions',
+  'Rent', 'Transportation', 'Shipping', 'Other'
+]);
+
+export function expenseEntry(input) {
+  const {description, amount, date, product_id = null, included_in_product_cost = false} = input ?? {};
+  const category = input?.category === undefined ? 'Uncategorized' :
+    typeof input.category === 'string' ? input.category.trim().replace(/\s+/g, ' ') : '';
+  if (typeof description !== 'string' || !description.trim() || description.length > 160 ||
+      !isMoney(amount) || amount === 0 || !isDate(date) || !category || category.length > 60 ||
+      typeof included_in_product_cost !== 'boolean' ||
+      (product_id !== null && (!Number.isInteger(product_id) || product_id < 1 || product_id > 2147483647))) {
+    throw Error('Enter a category, description, positive amount, and valid date.');
+  }
+  const standard = expenseCategories.find(name => name.toLowerCase() === category.toLowerCase());
+  return {description: description.trim(), amount, date, category: standard ?? category, product_id, included_in_product_cost};
+}
+
+export function expenseBreakdown(expenses) {
+  const categories = new Map();
+  for (const expense of expenses) {
+    const name = expense.category ?? 'Uncategorized';
+    const key = name.toLowerCase();
+    const row = categories.get(key) ?? {name, total:0, count:0};
+    row.total += Math.round(expense.amount * 100);
+    row.count++;
+    categories.set(key, row);
+  }
+  return [...categories.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+    .map(row => ({...row,total:row.total / 100}));
+}
+
 const calendar = new Intl.DateTimeFormat('en-CA', {
   timeZone:'Africa/Cairo', year:'numeric', month:'2-digit', day:'2-digit'
 });
@@ -40,11 +73,14 @@ export function financials(data, period) {
   const cents = amount => Math.round(amount * 100);
   const revenue = sales.reduce((sum, o) => sum + o.quantity * cents(o.unit_price), 0);
   const cogs = sales.reduce((sum, o) => sum + o.quantity * cents(o.unit_cost), 0);
-  const overhead = expenses.reduce((sum, e) => sum + cents(e.amount), 0);
+  const recordedExpenses = expenses.reduce((sum, e) => sum + cents(e.amount), 0);
+  const includedCosts = expenses.filter(e => e.included_in_product_cost).reduce((sum, e) => sum + cents(e.amount), 0);
+  const overhead = recordedExpenses - includedCosts;
   const writeoffs = losses.reduce((sum, m) => sum - m.delta * cents(m.unit_cost), 0);
   return {
     revenue: revenue / 100, cogs: cogs / 100, gross: (revenue - cogs) / 100,
     overhead: overhead / 100, writeoffs: writeoffs / 100,
+    recordedExpenses: recordedExpenses / 100, includedCosts: includedCosts / 100,
     net: (revenue - cogs - overhead - writeoffs) / 100, expenses,
     units: sales.reduce((sum, o) => sum + o.quantity, 0)
   };

@@ -43,6 +43,10 @@ export async function initialize(){
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   description TEXT NOT NULL, amount NUMERIC(12,2) NOT NULL CHECK(amount>0), date DATE NOT NULL
  );
+ ALTER TABLE operating_expenses
+  ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Uncategorized',
+  ADD COLUMN IF NOT EXISTS included_in_product_cost BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS product_id INTEGER REFERENCES products(id);
  CREATE TABLE IF NOT EXISTS sales_targets(
   period TEXT PRIMARY KEY, amount NUMERIC(12,2) NOT NULL CHECK(amount>=0)
  );`);

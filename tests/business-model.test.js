@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { financials, pricingPlan, reportMargins } from '../public/business-model.js';
+import { expenseBreakdown, financials, pricingPlan, reportMargins } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -34,4 +34,25 @@ test('break-even sales estimate uses the recorded gross margin and current defic
   });
   assert.equal(reportMargins({revenue:0,gross:0,net:-20}).revenueToBreakEven,null);
   assert.equal(reportMargins({revenue:100,gross:40,net:20}).revenueToBreakEven,0);
+});
+
+test('expense reporting groups custom categories and deducts production costs only once', () => {
+  const expenses = [
+    {category:'Materials',amount:20,date:'2026-11-02',included_in_product_cost:true},
+    {category:'Shipping',amount:8.25,date:'2026-11-02'},
+    {category:'shipping',amount:1.75,date:'2026-11-03'},
+    {amount:5,date:'2026-11-04'},
+    {category:'Rent',amount:200,date:'2026-10-30'}
+  ];
+  const sale = {quantity:2,unit_price:40,unit_cost:10,status:'Paid',date:'2026-11-05T12:00:00Z'};
+  const report = financials({orders:[sale],expenses},'2026-11');
+  assert.equal(report.recordedExpenses,35);
+  assert.equal(report.includedCosts,20);
+  assert.equal(report.overhead,15);
+  assert.equal(report.net,45);
+  assert.deepEqual(expenseBreakdown(report.expenses),[
+    {name:'Materials',count:1,total:20},
+    {name:'Shipping',count:2,total:10},
+    {name:'Uncategorized',count:1,total:5}
+  ]);
 });

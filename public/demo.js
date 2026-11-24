@@ -1,4 +1,4 @@
-import { stockChange, isDate, isMoney, isTargetPeriod } from './business-model.js';
+import { stockChange, expenseEntry, isMoney, isTargetPeriod } from './business-model.js';
 const storageKey='relay-crm-demo-v1';
 let data;
 async function load(){
@@ -43,9 +43,9 @@ export async function demoApi(url,options={}){
   save();return movements[0];
  }
  if(url==='/api/expenses'&&method==='POST'){
-  const p=payload();
-  if(!p.description.trim()||!isMoney(p.amount)||!p.amount||!isDate(p.date))throw Error('Enter a description, positive amount and valid date.');
-  const expense={...p,description:p.description.trim(),id:nextId(expenses)};
+  const p=expenseEntry(payload());
+  if(p.product_id!==null&&!products.some(product=>product.id===p.product_id))throw Error('Choose an existing product.');
+  const expense={...p,id:nextId(expenses)};
   expenses.unshift(expense);save();return expense;
  }
  if(url.startsWith('/api/expenses/')&&method==='DELETE'){

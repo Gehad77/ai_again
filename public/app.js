@@ -228,6 +228,10 @@ function bindBusinessProfile(){
    button.disabled=true;
    const payload=Object.fromEntries(new FormData(form));
    payload.amount=Number(payload.amount);
+   if(form!==target){
+    payload.product_id=payload.product_id?Number(payload.product_id):null;
+    payload.included_in_product_cost=form.elements.included_in_product_cost.checked;
+   }
    try{await api(url,{method,body:JSON.stringify(payload)});}
    catch(error){form.querySelector('.form-error').textContent=error.message;button.disabled=false;return;}
    if(form===target)state.businessPeriod=payload.period;

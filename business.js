@@ -1,5 +1,5 @@
 import { pool } from './db.js';
-import { isMoney, isDate, isTargetPeriod, stockChange } from './public/business-model.js';
+import { isMoney, expenseEntry, isTargetPeriod, stockChange } from './public/business-model.js';
 
 export async function recordSale(client, order, product) {
   const remaining = product.stock - order.quantity;
@@ -64,14 +64,21 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
     }
   }
   if (route === '/api/expenses' && req.method === 'POST') {
-    const p = await body(req);
-    if (typeof p?.description !== 'string' || !p.description.trim() || p.description.length > 160 ||
-        !isMoney(p.amount) || p.amount === 0 || !isDate(p.date)) invalid('Enter a description, positive amount and valid date.');
-    const result = await pool.query(
-      'INSERT INTO operating_expenses(description,amount,date) VALUES($1,$2,$3) RETURNING id,description,amount,date::text',
-      [p.description.trim(), p.amount, p.date]
-    );
-    return json(res, 201, result.rows[0]);
+    const payload = await body(req);
+    let expense;
+    try { expense = expenseEntry(payload); } catch (error) { invalid(error.message); }
+    const {description, amount, date, category, product_id, included_in_product_cost} = expense;
+    try {
+      const result = await pool.query(
+        `INSERT INTO operating_expenses(description,amount,date,category,product_id,included_in_product_cost)
+         VALUES($1,$2,$3,$4,$5,$6) RETURNING id,description,amount,date::text,category,product_id,included_in_product_cost`,
+        [description, amount, date, category, product_id, included_in_product_cost]
+      );
+      return json(res, 201, result.rows[0]);
+    } catch (error) {
+      if (error.code === '23503') invalid('Choose an existing product.');
+      throw error;
+    }
   }
   const expense = route.match(/^\/api\/expenses\/(\d{1,10})$/);
   if (expense && Number(expense[1]) <= 2147483647 && req.method === 'DELETE') {
