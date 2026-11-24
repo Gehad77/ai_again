@@ -307,14 +307,21 @@ export function priceScenario({unitCost,extraCost,margin,fixedCosts,sellingPrice
   const price=sellingPrice??suggested?.price;
   if(!price)return null;
   const cost=cents(unitCost)+cents(extraCost);
-  const contribution=cents(price)-cost;
-  const total=contribution*units-cents(fixedCosts);
-  if(!Number.isSafeInteger(total))return null;
+  const priceCents=cents(price);
+  const contribution=priceCents-cost;
+  const revenue=priceCents*units;
+  const variableCosts=cost*units;
+  const totalCosts=variableCosts+cents(fixedCosts);
+  if(!Number.isSafeInteger(revenue)||!Number.isSafeInteger(totalCosts))return null;
   return {
     suggestedPrice:suggested?.price??null,
     price, unitCost:cost/100, unitProfit:contribution/100,
-    margin:contribution/cents(price),
-    totalProfit:total/100,
+    margin:contribution/priceCents,
+    revenue:revenue/100,
+    variableCosts:variableCosts/100,
+    totalCosts:totalCosts/100,
+    totalProfit:(revenue-totalCosts)/100,
+    breakEvenPrice:Math.ceil(totalCosts/units)/100,
     unitsToCoverCosts:contribution>0?Math.ceil(cents(fixedCosts)/contribution):null
   };
 }

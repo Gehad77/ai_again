@@ -139,12 +139,17 @@ test('quarterly product goals use explicit overrides and preserve each remaining
 test('independent pricing scenarios estimate profit at a manual or suggested price',()=>{
  const inputs={unitCost:80,extraCost:20,margin:20,fixedCosts:100,units:10};
  assert.deepEqual(priceScenario({...inputs,sellingPrice:150}),{
-  suggestedPrice:125,price:150,unitCost:100,unitProfit:50,margin:1/3,totalProfit:400,unitsToCoverCosts:2
+  suggestedPrice:125,price:150,unitCost:100,unitProfit:50,margin:1/3,revenue:1500,variableCosts:1000,totalCosts:1100,totalProfit:400,breakEvenPrice:110,unitsToCoverCosts:2
  });
  assert.equal(priceScenario({...inputs,sellingPrice:null}).totalProfit,150);
  assert.equal(priceScenario({...inputs,sellingPrice:90}).totalProfit,-200);
  assert.equal(priceScenario({...inputs,sellingPrice:90}).unitsToCoverCosts,null);
  assert.equal(priceScenario({...inputs,sellingPrice:null,unitCost:0,extraCost:0}),null);
+ const sample=priceScenario({unitCost:50,extraCost:10,margin:30,fixedCosts:20,sellingPrice:20,units:1});
+ assert.equal(sample.suggestedPrice,85.72);
+ assert.equal(sample.unitProfit,-40);
+ assert.equal(sample.totalProfit,-60);
+ assert.equal(sample.breakEvenPrice,80);
 });
 
 test('expense filters reconcile spending and tax category aliases for legacy entries',()=>{

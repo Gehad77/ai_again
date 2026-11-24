@@ -297,6 +297,30 @@ Choose or type a category|اختاري أو اكتبي تصنيفًا
 e.g. Cotton for T-shirts|مثلًا قماش قطني للتيشيرتات
 No recorded expenses this period.|مفيش مصروفات مسجّلة في الفترة دي.
 Pricing calculator|حاسبة التسعير
+Use the same period for expected units and planned fixed expenses, such as one month.|اختاري نفس الفترة لعدد القطع والمصاريف الثابتة، مثلًا شهر واحد.
+1. Build the unit cost|١. احسبي تكلفة القطعة
+2. Plan the selling price|٢. حددي سعر البيع
+3. Plan sales and expenses|٣. قدّري المبيعات والمصاريف
+Choosing a product copies its saved cost and price into this estimate.|اختيار منتج بيجيب تكلفته وسعره المحفوظين للحسبة دي.
+Use the supplier price per piece, or divide batch materials and labour by the units produced.|استخدمي سعر القطعة من المورّد، أو اقسمي تكلفة الخامات والتصنيع للدفعة على عدد القطع اللي اتعملت.
+Add packaging, commissions or delivery costs you pay per sale. Leave out costs already in the first field.|ضيفي تغليف أو عمولة أو توصيل بتدفعيه عن كل قطعة. أي تكلفة اتحسبت في أول خانة اكتبيها مرة واحدة.
+The percentage of the selling price you want left after unit costs. Change the example value to suit your business.|النسبة اللي عايزة تفضل من سعر البيع بعد تكلفة القطعة. غيّري النسبة الموجودة حسب نشاطك.
+Use the price you expect the customer to pay before tax. Compare it with the suggested price below.|دخّلي سعر البيع للعميل قبل الضريبة وقارنيه بالسعر المقترح تحت.
+Enter the share of rent, subscriptions or campaign costs you want this product to cover in the period.|اكتبي نصيب المنتج من الإيجار أو الاشتراكات أو تكلفة الحملة للفترة.
+Use a realistic sales estimate for the period, based on past sales or confirmed demand.|قدّري عدد القطع المتوقع بيعها في نفس الفترة من مبيعات سابقة أو طلبات مؤكدة.
+Estimated budget breakdown|تفصيل الميزانية التقديرية
+Expected sales revenue|إيراد المبيعات المتوقع
+Costs for the units sold|تكلفة القطع المتوقع بيعها
+Total planned costs|إجمالي التكاليف المتوقعة
+Expected profit or loss before tax|الربح أو الخسارة المتوقعة قبل الضريبة
+Minimum price to cover costs|أقل سعر يغطي التكاليف
+A positive unit cost is needed to suggest a price.|محتاجين تكلفة موجبة للقطعة عشان نقترح سعر.
+Calculated from unit cost and target margin.|محسوب من تكلفة القطعة والهامش المستهدف.
+Taken from your proposed selling price.|ده السعر اللي دخلتيه في خانة سعر البيع.
+Taken from your budget for the selected period.|ده المبلغ اللي حددتيه في ميزانية الفترة.
+The selling price must exceed the unit cost to cover fixed expenses.|سعر البيع لازم يكون أعلى من تكلفة القطعة عشان يغطي المصاريف الثابتة.
+Rounded up to whole units|اتقرّب لأعلى لعدد قطع صحيح
+At the expected sales volume, rounded up|حسب عدد القطع المتوقع، والسعر اتقرّب لأعلى
 Pricing|التسعير
 Product pricing|تسعير المنتجات
 Compare estimates before setting a price in your catalog.|قارني التقديرات قبل ما تحددي السعر في الكتالوج.

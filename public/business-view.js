@@ -53,23 +53,67 @@ function starterTasks(data){
 }
 
 export function pricingPage(data, esc){
-  return `<div class="heading"><h1>Product pricing</h1><p>Compare estimates before setting a price in your catalog.</p></div><section class="card recent business-card"><div class="card-head"><div>
-    <h2>Pricing calculator</h2><p>Estimate a selling price and how many units would cover your planned expenses.</p></div></div>
-    <form id="pricing-calculator" class="business-form">
-      <label>Product <select name="product"><option value="">Manual estimate</option>
-        ${data.products.map(p => `<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
-      <label>Product cost per unit (${currency})<input name="cost" ${amountField} required></label>
-      <label>Other cost per unit (${currency})<input name="extra" ${amountField} value="0" required></label>
-      <label>Target margin (%)<input name="margin" type="number" step="0.01" min="0.01" max="99.99" value="30" required></label>
-      <label>Planned fixed expenses (${currency})<input name="fixed" ${amountField} value="0" required></label>
-      <label>Proposed selling price (${currency})<input name="selling_price" ${amountField} placeholder="Leave blank to use the suggested price"></label>
-      <label>Expected units sold<input name="units" type="number" min="1" max="1000000" step="1" value="1" required></label>
+  return `<div class="heading"><h1>Product pricing</h1><p>Compare estimates before setting a price in your catalog.</p></div>
+  <section class="card recent business-card"><div class="card-head"><div>
+    <h2>Pricing calculator</h2><p>Use the same period for expected units and planned fixed expenses, such as one month.</p></div></div>
+    <form id="pricing-calculator" class="business-form pricing-form">
+      <fieldset><legend>1. Build the unit cost</legend>
+        <label>Product <select name="product"><option value="">Manual estimate</option>
+         ${data.products.map(p => `<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+         <small>Choosing a product copies its saved cost and price into this estimate.</small></label>
+        <label>Product cost per unit (${currency})<input name="cost" ${amountField} required>
+         <small>Use the supplier price per piece, or divide batch materials and labour by the units produced.</small></label>
+        <label>Other cost per unit (${currency})<input name="extra" ${amountField} value="0" required>
+         <small>Add packaging, commissions or delivery costs you pay per sale. Leave out costs already in the first field.</small></label>
+      </fieldset>
+      <fieldset><legend>2. Plan the selling price</legend>
+        <label>Target margin (%)<input name="margin" type="number" step="0.01" min="0.01" max="99.99" value="30" required>
+         <small>The percentage of the selling price you want left after unit costs. Change the example value to suit your business.</small></label>
+        <label>Proposed selling price (${currency})<input name="selling_price" ${amountField} placeholder="Leave blank to use the suggested price">
+         <small>Use the price you expect the customer to pay before tax. Compare it with the suggested price below.</small></label>
+      </fieldset>
+      <fieldset><legend>3. Plan sales and expenses</legend>
+        <label>Planned fixed expenses (${currency})<input name="fixed" ${amountField} value="0" required>
+         <small>Enter the share of rent, subscriptions or campaign costs you want this product to cover in the period.</small></label>
+        <label>Expected units sold<input name="units" type="number" min="1" max="1000000" step="1" value="1" required>
+         <small>Use a realistic sales estimate for the period, based on past sales or confirmed demand.</small></label>
+      </fieldset>
       <button class="primary">Calculate</button>
-      <small>Estimates only. Prices, orders and financial reports are not updated.</small>
       <p class="form-error" role="alert"></p>
+      <small>Estimates only. Prices, orders and financial reports are not updated.</small>
     </form>
-    <div id="pricing-result" class="metrics" role="status"></div>
+    <div id="pricing-result"></div>
   </section>`;
+}
+
+function pricingBudget(plan,inputs){
+  const units=inputs.units.toLocaleString(locale());
+  const equation=(...parts)=>`<bdi dir="ltr">${parts.join(' ')}</bdi>`;
+  const row=(label,formula,value,extra='')=>`<div class="budget-row">
+    <dt><strong>${label}</strong><small>${formula}</small>${extra?`<small>${extra}</small>`:''}</dt><dd>${value}</dd></div>`;
+  const price=usd(plan.price);
+  const cost=usd(plan.unitCost);
+  const profit=usd(plan.unitProfit);
+  const fixed=usd(inputs.fixedCosts);
+  const rate=new Intl.NumberFormat(locale(),{style:'percent',maximumFractionDigits:2}).format(inputs.margin/100);
+  const priceNote=inputs.sellingPrice===null?'Calculated from unit cost and target margin.':'Taken from your proposed selling price.';
+  return `<div class="pricing-budget"><h3>Estimated budget breakdown</h3>
+  <dl>
+  ${row('Total cost per unit',equation(usd(inputs.unitCost),'+',usd(inputs.extraCost)),cost)}
+  ${row('Suggested selling price',plan.suggestedPrice===null?'A positive unit cost is needed to suggest a price.':equation(cost,'÷','(1 − '+rate+')'),
+      plan.suggestedPrice===null?'—':usd(plan.suggestedPrice),'Rounded up to the nearest cent')}
+  ${row('Selling price used',priceNote,price)}
+  ${row('Expected result per unit',equation(price,'−',cost),profit)}
+  ${row('Margin at this price',equation(profit,'÷',price,'× 100'),marginLabel(plan.margin))}
+  ${row('Expected sales revenue',equation(price,'×',units),usd(plan.revenue))}
+  ${row('Costs for the units sold',equation(cost,'×',units),usd(plan.variableCosts))}
+  ${row('Planned fixed expenses', 'Taken from your budget for the selected period.',fixed)}
+  ${row('Total planned costs',equation(usd(plan.variableCosts),'+',fixed),usd(plan.totalCosts))}
+  ${row('Expected profit or loss before tax',equation(usd(plan.revenue),'−',usd(plan.totalCosts)),usd(plan.totalProfit))}
+  ${row('Units to cover fixed expenses',plan.unitsToCoverCosts===null?'The selling price must exceed the unit cost to cover fixed expenses.':equation(fixed,'÷',profit),
+     plan.unitsToCoverCosts===null?'—':plan.unitsToCoverCosts.toLocaleString(locale()),plan.unitsToCoverCosts===null?'':'Rounded up to whole units')}
+  ${row('Minimum price to cover costs',equation(usd(plan.totalCosts),'÷',units),usd(plan.breakEvenPrice),'At the expected sales volume, rounded up')}
+  </dl></div>`;
 }
 
 export function bindPricingCalculator(data){
@@ -90,21 +134,17 @@ export function bindPricingCalculator(data){
     event.preventDefault();
     clear();
     const {cost,extra,margin,fixed,selling_price,units} = Object.fromEntries(new FormData(form));
-    const plan=priceScenario({unitCost:Number(cost),extraCost:Number(extra),margin:Number(margin),fixedCosts:Number(fixed),
-      sellingPrice:selling_price===''?null:Number(selling_price),units:Number(units)});
+    const inputs={unitCost:Number(cost),extraCost:Number(extra),margin:Number(margin),fixedCosts:Number(fixed),
+      sellingPrice:selling_price===''?null:Number(selling_price),units:Number(units)};
+    const plan=priceScenario(inputs);
     if(!plan){
       form.querySelector('.form-error').textContent = 'Enter a selling price greater than zero or a positive cost to calculate a suggested price.';
       return;
     }
-    result.innerHTML=[
-      metric('Total cost per unit',usd(plan.unitCost)),
-      metric('Suggested selling price',plan.suggestedPrice===null?'—':usd(plan.suggestedPrice),'Based on the target margin'),
-      metric('Selling price used',usd(plan.price)),
-      metric('Expected result per unit',usd(plan.unitProfit),'Before fixed expenses and tax'),
-      metric('Margin at this price',marginLabel(plan.margin)),
-      metric('Expected profit or loss',usd(plan.totalProfit),'For the expected units, after fixed expenses and before tax'),
-      metric('Units to cover fixed expenses',plan.unitsToCoverCosts===null?'—':plan.unitsToCoverCosts.toLocaleString(locale()))
-    ].join('');
+    result.innerHTML=pricingBudget(plan,inputs);
+    const heading=result.querySelector('h3');
+    heading.tabIndex=-1;
+    heading.focus();
 
   };
 }
