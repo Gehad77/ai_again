@@ -25,6 +25,11 @@ export function stockChange(product, input) {
 }
 
 export const incomeTaxCategory='Income tax';
+export const isIncomeTaxCategory=category=>['income tax','ضريبة الدخل','ضريبة دخل'].includes(
+ typeof category==='string'?category.trim().replace(/\s+/g,' ').toLowerCase():''
+);
+
+export const expenseCategoryName=category=>isIncomeTaxCategory(category)?incomeTaxCategory:(category??'Uncategorized');
 
 export const expenseCategories = Object.freeze([
   'Purchases', 'Materials', 'Manufacturing', 'Marketing', 'Sales', 'Tools & subscriptions',
@@ -41,7 +46,7 @@ export function expenseEntry(input) {
       (product_id !== null && (!Number.isInteger(product_id) || product_id < 1 || product_id > 2147483647))) {
     throw Error('Enter a category, description, positive amount, and valid date.');
   }
-  const standard = expenseCategories.find(name => name.toLowerCase() === category.toLowerCase());
+  const standard = isIncomeTaxCategory(category)?incomeTaxCategory:expenseCategories.find(name => name.toLowerCase() === category.toLowerCase());
   if(standard===incomeTaxCategory&&(product_id!==null||included_in_product_cost)){
     throw Error('Record income tax as a general expense with no product selected.');
   }
@@ -51,7 +56,7 @@ export function expenseEntry(input) {
 export function expenseBreakdown(expenses) {
   const categories = new Map();
   for (const expense of expenses) {
-    const name = expense.category ?? 'Uncategorized';
+    const name = expenseCategoryName(expense.category);
     const key = name.toLowerCase();
     const row = categories.get(key) ?? {name, total:0, count:0};
     row.total += Math.round(expense.amount * 100);
@@ -60,6 +65,21 @@ export function expenseBreakdown(expenses) {
   }
   return [...categories.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
     .map(row => ({...row,total:row.total / 100}));
+}
+
+export function reviewExpenses(expenses,{query='',category='',product=''}={}){
+  const text=query.trim().toLowerCase();
+  const matching=expenses.filter(expense=>{
+    const name=expenseCategoryName(expense.category);
+    return (!text||expense.description.toLowerCase().includes(text))&&
+      (!category||name.toLowerCase()===category.toLowerCase())&&
+      (!product||(product==='general'?expense.product_id==null:expense.product_id===Number(product)));
+  });
+  return {
+    matching,
+    total:matching.reduce((sum,e)=>sum+cents(e.amount),0)/100,
+    deducted:matching.reduce((sum,e)=>sum+(e.included_in_product_cost?0:cents(e.amount)),0)/100
+  };
 }
 
 export const defaultSettings = Object.freeze({
@@ -106,7 +126,7 @@ export function financials(data, period) {
   const recordedExpenses = expenses.reduce((sum, e) => sum + cents(e.amount), 0);
   const includedCosts = expenses.filter(e => e.included_in_product_cost).reduce((sum, e) => sum + cents(e.amount), 0);
   const overhead = recordedExpenses - includedCosts;
-  const incomeTaxPayments=expenses.filter(e=>e.category?.toLowerCase()===incomeTaxCategory.toLowerCase()&&!e.included_in_product_cost);
+  const incomeTaxPayments=expenses.filter(e=>isIncomeTaxCategory(e.category)&&!e.included_in_product_cost);
   const paidIncomeTax=incomeTaxPayments.reduce((sum,e)=>sum+cents(e.amount),0);
   const writeoffs = losses.reduce((sum, m) => sum - m.delta * cents(m.unit_cost), 0);
   return {
@@ -239,7 +259,7 @@ export function financeCsv(data,period){
   for(const expense of expenses){
     const included=expense.included_in_product_cost;
     add(included?'Expense already in product cost':'Expense',expense.date,'Expense '+expense.id,products.get(expense.product_id),
-      expense.category??'Uncategorized',expense.description,expense.amount,'',included?0:-expense.amount);
+      expenseCategoryName(expense.category),expense.description,expense.amount,'',included?0:-expense.amount);
   }
   for(const loss of losses){
     const cost=-loss.delta*cents(loss.unit_cost)/100;

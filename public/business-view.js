@@ -1,6 +1,6 @@
 import {taxGuide} from './guide.js';
 import { currency, formatMoney, locale, translate } from './i18n.js';
-import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, priceScenario, productResults, productTargetReport, quarterFor, reportMargins, salesPlan } from './business-model.js';
+import { businessDate, financials, incomeTaxPlan, expenseBreakdown, expenseCategories, expenseCategoryName, priceScenario, productResults, productTargetReport, quarterFor, reportMargins, salesPlan } from './business-model.js';
 
 const usd = formatMoney;
 const percentage = () => new Intl.NumberFormat(locale(), {style:'percent', maximumFractionDigits:1});
@@ -161,13 +161,15 @@ export function expensePage(data, esc, year, period){
     .filter(name => name !== 'Uncategorized' && !expenseCategories.includes(name));
   const breakdown = expenseBreakdown(report.expenses);
   return `<div class="heading finance-heading"><div><h1>Expenses</h1><p>Track spending by category and product.</p></div>${periodControls(year,period)}</div>
-  <div class="metrics finance-summary">
+  <div class="metrics finance-summary expense-overview">
       ${metric('Total recorded spending',usd(report.recordedExpenses))}
+      ${metric('Expenses deducted separately',usd(report.overhead))}
       ${metric('Paid sales',usd(report.revenue))}
-      ${metric(report.net<0?'Current net loss':'Current net result',usd(Math.abs(report.net)))}
+      ${metric(report.net<0?'Current net loss':report.net>0?'Current net profit':'Current net result',usd(Math.abs(report.net)))}
   </div>
   <div class="page-actions" aria-label="Expense page sections">
     <button class="primary" type="button" data-section="business-expense">Record expense</button>
+    <button type="button" data-section="expense-ledger">Expense entries</button>
     <button type="button" data-download-finance>Download period report</button>
     <button type="button" data-section="business-target">Sales targets</button>
     <button type="button" data-section="product-targets">Product targets</button>
@@ -180,16 +182,18 @@ export function expensePage(data, esc, year, period){
       <label>Category<input name="category" list="expense-categories" maxlength="60" placeholder="Choose or type a category" required></label>
       <datalist id="expense-categories">${[...expenseCategories,...categories].map(name=>`<option value="${esc(name)}" label="${esc(translate(name))}"></option>`).join('')}</datalist>
       <label>Expense description<input name="description" maxlength="160" placeholder="e.g. Cotton for T-shirts" required></label>
-      <label>Amount (${currency})<input name="amount" ${amountField} required></label>
+      <label>Amount (${currency})<input name="amount" ${amountField.replace('min="0"','min="0.01"')} required></label>
       <label>Expense date<input name="date" type="date" value="${today}" required></label>
       <label>Related product<select name="product_id"><option value="">General expense</option>
       ${data.products.map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
       <label class="expense-cost-toggle"><input type="checkbox" name="included_in_product_cost" aria-describedby="expense-cost-note"> Already included in product cost</label>
       <button class="primary" type="submit">Record expense</button><button type="button" id="cancel-expense-edit" hidden>Cancel edit</button>
       <small id="expense-cost-note">Select this if the amount is already accounted for in the product cost used to calculate profit.</small>
+      <small id="expense-tax-note" hidden>Income tax is a general expense and cannot be linked to a product.</small>
       <p class="form-error" role="alert"></p>
     </form>
   </section>
+  ${expenseLedger(data,esc,report,breakdown)}
   ${salesTargets(data,esc,year,period)}
   ${productGoals(data,esc,year,period)}
   ${productProfit(data,esc,period)}
@@ -207,13 +211,34 @@ export function expensePage(data, esc, year, period){
       ${[...byProduct].sort((a,b)=>b[1]-a[1]).map(([id,total])=>`<tr><td>${id?productName(id):'General expense'}</td><td>${usd(total/100)}</td></tr>`).join('')||'<tr><td colspan="2">No recorded expenses this period.</td></tr>'}
       </tbody></table>
     </div>
-    <div class="table-wrap">
-      <table><caption>Expense entries</caption><thead><tr><th>Expense</th><th>Category</th><th>Product</th><th>Date</th><th>Amount</th><th>Profit treatment</th><th>Actions</th></tr></thead><tbody>
-      ${report.expenses.map(e => `<tr><td data-user-content>${esc(e.description)}</td><td>${esc(e.category ?? 'Uncategorized')}</td>
-        <td>${e.product_id?productName(e.product_id):'—'}</td><td>${e.date}</td><td>${usd(e.amount)}</td>
-        <td>${e.included_in_product_cost?'Included in product cost':'Deducted separately'}</td><td><div class="expense-actions"><button type="button" data-edit-expense="${e.id}">Edit</button><button type="button" data-delete-expense="${e.id}">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="7">No recorded expenses this period.</td></tr>'}
-      </tbody></table>
-    </div>
+  </section>`;
+}
+
+function expenseLedger(data,esc,report,breakdown){
+  const names=new Map(data.products.map(p=>[p.id,p.name]));
+  const cell=(label,value,attrs='')=>`<td role="cell" data-label="${esc(translate(label))}" ${attrs}><span>${value}</span></td>`;
+  return `<section class="card recent business-card" id="expense-ledger">
+   <div class="card-head"><div><h2>Expense entries</h2><p>Find, review or correct entries for the selected period.</p></div></div>
+   <form id="expense-filters" class="business-form" role="search">
+    <label>Search descriptions<input name="query" type="search" placeholder="Search descriptions"></label>
+    <label>Category<select name="category"><option value="">All categories</option>
+     ${breakdown.map(row=>`<option value="${esc(row.name)}">${esc(translate(row.name))}</option>`).join('')}</select></label>
+    <label>Product<select name="product"><option value="">All products</option><option value="general">General expense</option>
+     ${data.products.map(p=>`<option data-user-content value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+    <button type="button" id="clear-expense-filters">Clear filters</button>
+   </form>
+   <div id="expense-filter-summary" class="expense-filter-summary" role="status"></div>
+   <div class="table-wrap expense-table"><table role="table"><thead role="rowgroup"><tr role="row"><th>Expense</th><th>Category</th><th>Product</th><th>Date</th><th>Amount</th><th>Profit treatment</th><th>Actions</th></tr></thead><tbody role="rowgroup">
+    ${report.expenses.map(entry=>`<tr role="row" data-expense-row="${entry.id}">
+      ${cell('Expense',esc(entry.description),'data-user-content')}
+      ${cell('Category',esc(expenseCategoryName(entry.category)))}
+      ${cell('Product',entry.product_id?esc(names.get(entry.product_id)??'Unknown product'):'—','data-user-content')}
+      ${cell('Date',entry.date)}${cell('Amount',usd(entry.amount))}
+      ${cell('Profit treatment',entry.included_in_product_cost?'Included in product cost':'Deducted separately')}
+      ${cell('Actions',`<div class="expense-actions"><button type="button" data-edit-expense="${entry.id}">Edit</button><button type="button" data-delete-expense="${entry.id}">Delete</button></div>`)}
+    </tr>`).join('')}
+    <tr id="no-matching-expenses" role="row" ${report.expenses.length?'hidden':''}><td colspan="7">No expenses match these filters.</td></tr>
+   </tbody></table></div>
   </section>`;
 }
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, productTargetReport, salesPlan, priceScenario, pricingPlan, reportMargins } from '../public/business-model.js';
+import { defaultReportPeriod, expenseBreakdown, financeCsv, financials, incomeTaxPlan, productResults, productTargetReport, salesPlan, priceScenario, pricingPlan, reportMargins, reviewExpenses } from '../public/business-model.js';
 
 test('financial reports use Cairo payment dates and count costs and expenses once', () => {
   const sale = {quantity:2, unit_price:10, unit_cost:3, status:'Paid', date:'2026-06-30T18:00:00Z'};
@@ -145,4 +145,22 @@ test('independent pricing scenarios estimate profit at a manual or suggested pri
  assert.equal(priceScenario({...inputs,sellingPrice:90}).totalProfit,-200);
  assert.equal(priceScenario({...inputs,sellingPrice:90}).unitsToCoverCosts,null);
  assert.equal(priceScenario({...inputs,sellingPrice:null,unitCost:0,extraCost:0}),null);
+});
+
+test('expense filters reconcile spending and tax category aliases for legacy entries',()=>{
+ const expenses=[
+  {id:1,description:'دفعة ضريبة',category:'ضريبة الدخل',date:'2026-11-20',amount:15},
+  {id:2,description:'Cotton delivery',category:'Materials',date:'2026-11-20',product_id:1,amount:40,included_in_product_cost:true},
+  {id:3,description:'Cotton shipping',category:'Shipping',date:'2026-11-21',product_id:1,amount:10},
+  {id:4,description:'Rent',category:'Rent',date:'2026-11-22',amount:100}
+ ];
+ const filtered=reviewExpenses(expenses,{query:' COTTON ',product:'1'});
+ assert.deepEqual(filtered.matching.map(expense=>expense.id),[2,3]);
+ assert.equal(filtered.total,50);
+ assert.equal(filtered.deducted,10);
+ assert.equal(reviewExpenses(expenses,{category:'Income tax',product:'general'}).total,15);
+ const report=financials({orders:[],expenses},'2026-11');
+ assert.equal(report.paidIncomeTax,15);
+ assert.equal(report.overhead,125);
+ assert.equal(report.recordedExpenses,165);
 });

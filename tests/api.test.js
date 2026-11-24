@@ -88,9 +88,11 @@ test('income tax planning rate is owner-only, validated and clearable',async()=>
  assert.equal((await fetch(base+'/api/settings/tax',options(17.253))).status,400);
  assert.equal((await fetch(base+'/api/settings/tax',options(17.25))).status,200);
  assert.equal((await (await fetch(base+'/api/overview')).json()).settings.income_tax_rate,17.25);
- const expense={description:'Tax installment',category:'Income tax',amount:15,date:'2026-11-24'};
+ const expense={description:'Tax installment',category:'ضريبة الدخل',amount:15,date:'2026-11-24'};
  assert.equal((await fetch(base+'/api/expenses',{method:'POST',body:JSON.stringify({...expense,included_in_product_cost:true})})).status,400);
- assert.equal((await fetch(base+'/api/expenses',{method:'POST',body:JSON.stringify(expense)})).status,201);
+ const savedExpense=await fetch(base+'/api/expenses',{method:'POST',body:JSON.stringify(expense)});
+ assert.equal(savedExpense.status,201);
+ assert.equal((await savedExpense.json()).category,'Income tax');
  assert.equal((await fetch(base+'/api/settings/tax',options(null))).status,200);
  assert.equal((await (await fetch(base+'/api/overview')).json()).settings.income_tax_rate,null);
 });

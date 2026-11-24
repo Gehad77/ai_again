@@ -1,6 +1,6 @@
 import { contextGuide, guidePage } from './guide.js';
 import { currency, formatMoney, language, localize, locale, setCurrency, setLanguage, translate } from './i18n.js';
-import { businessDate, currencies, defaultReportPeriod, financeCsv, isInPeriod, timeZones } from './business-model.js';
+import { businessDate, currencies, defaultReportPeriod, expenseCategoryName, financeCsv, financials, isIncomeTaxCategory, isInPeriod, reviewExpenses, timeZones } from './business-model.js';
 import { bindPricingCalculator, bindSalesTargets, bindWarehouseFilters, businessProfile, expensePage, pricingPage, stockDialog, taxPage, warehousePage, warehouseSummary } from './business-view.js';
 import { analyze } from './analytics.js';
 const staticSite=location.hostname.endsWith('github.io');
@@ -304,7 +304,11 @@ document.addEventListener('click',e=>{const jump=e.target.closest('[data-section
 const edit=e.target.closest('[data-edit-product]');
 if(edit)openCreate('product',state.data.products.find(p=>p.id===Number(edit.dataset.editProduct)));
 const stock=e.target.closest('[data-stock-product]');
-if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide','warehouse','pricing'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory)$('#business-expense').elements.category.value=go.dataset.expenseCategory;if(go.dataset.jump)jumpToSection(go.dataset.jump);else focusPage();}if(chat){if(!chat.matches('.thread'))state.inboxChannel='All channels';state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);state.focusThread=chat.matches('.thread')?state.selected:null;render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
+if(stock)openStock(state.data.products.find(p=>p.id===Number(stock.dataset.stockProduct)));const go=e.target.closest('[data-go]');const chat=e.target.closest('[data-chat]');const f=e.target.closest('[data-filter]');const connect=e.target.closest('.connect');if(go){e.preventDefault();state.page=go.dataset.go;history.replaceState(null,'',location.pathname+location.search+(['profile','expenses','settings','taxes','guide','warehouse','pricing'].includes(state.page)?'#'+state.page:''));state.search='';state.filter='All channels';render();if(go.dataset.expenseCategory){
+ const category=$('#business-expense').elements.category;
+ category.value=go.dataset.expenseCategory;
+ category.dispatchEvent(new Event('input'));
+}if(go.dataset.jump)jumpToSection(go.dataset.jump);else focusPage();}if(chat){if(!chat.matches('.thread'))state.inboxChannel='All channels';state.page='inbox';if(location.hash==='#profile')history.replaceState(null,'',location.pathname+location.search);state.selected=Number(chat.dataset.chat);state.focusThread=chat.matches('.thread')?state.selected:null;render();}if(f){state.filter=f.dataset.filter;render();}if(connect)toast(`${connect.dataset.channel} requires Meta credentials and webhook setup. No account is connected yet.`);});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('tr[data-chat]'))e.target.click();});
 
 async function loadCustomerAccounts(){
@@ -492,7 +496,7 @@ function bindBusinessProfile(){
  const expenseForm=$('#business-expense');
  bindProductGoals();
 
- if(expenseForm)bindExpenseEditing(expenseForm);
+ if(expenseForm){bindExpenseEditing(expenseForm);bindExpenseFilters();}
  $('[data-download-finance]').onclick=()=>downloadFinanceReport();
 
  target.elements.period.onchange=()=>{
@@ -573,9 +577,23 @@ function bindExpenseEditing(form){
  const save=form.querySelector('[type=submit]');
  const cancel=$('#cancel-expense-edit');
  const error=form.querySelector('.form-error');
+ const category=form.elements.category;
+ const product=form.elements.product_id;
+ const included=form.elements.included_in_product_cost;
+ const syncTaxFields=()=>{
+  const tax=isIncomeTaxCategory(category.value);
+  if(tax){product.value='';included.checked=false;}
+  product.disabled=tax;
+  included.disabled=tax;
+  $('#expense-tax-note').hidden=!tax;
+  $('#expense-cost-note').hidden=tax;
+ };
+ category.oninput=syncTaxFields;
+ category.onchange=syncTaxFields;
  cancel.onclick=()=>{
   delete form.dataset.expenseId;
   form.reset();
+  syncTaxFields();
   title.textContent='Record expense';
   save.textContent='Record expense';
   cancel.hidden=true;
@@ -587,9 +605,10 @@ function bindExpenseEditing(form){
    const entry=state.data.expenses.find(item=>item.id===Number(button.dataset.editExpense));
    form.dataset.expenseId=entry.id;
    for(const name of ['description','amount','date','category','product_id']){
-    form.elements[name].value=entry[name]??(name==='category'?'Uncategorized':'');
+    form.elements[name].value=name==='category'?expenseCategoryName(entry[name]):entry[name]??'';
    }
-   form.elements.included_in_product_cost.checked=Boolean(entry.included_in_product_cost);
+   included.checked=Boolean(entry.included_in_product_cost);
+   syncTaxFields();
    title.textContent='Edit expense';
    save.textContent='Save expense';
    cancel.hidden=false;
@@ -598,6 +617,39 @@ function bindExpenseEditing(form){
    form.elements.description.focus({preventScroll:true});
   };
  });
+}
+
+function bindExpenseFilters(){
+ const form=$('#expense-filters');
+ const entries=financials(state.data,state.businessPeriod).expenses;
+ const rows=[...document.querySelectorAll('[data-expense-row]')];
+ const summary=$('#expense-filter-summary');
+ const empty=$('#no-matching-expenses');
+ for(const [key,value] of Object.entries(state.expenseFilters??{})){
+  const field=form.elements[key];
+  if(field&&(!field.options||[...field.options].some(option=>option.value===value)))field.value=value;
+ }
+ const update=()=>{
+  state.expenseFilters=Object.fromEntries(new FormData(form));
+  const result=reviewExpenses(entries,state.expenseFilters);
+  const visible=new Set(result.matching.map(item=>item.id));
+  for(const row of rows)row.hidden=!visible.has(Number(row.dataset.expenseRow));
+  empty.hidden=visible.size>0;
+  summary.textContent=[
+   translate('Matching entries')+' '+new Intl.NumberFormat(locale()).format(visible.size),
+   translate('Filtered spending')+' '+formatMoney(result.total),
+   translate('Deducted from profit')+' '+formatMoney(result.deducted)
+  ].join(' · ');
+ };
+ form.oninput=update;
+ form.onchange=update;
+ form.onsubmit=event=>event.preventDefault();
+ $('#clear-expense-filters').onclick=()=>{
+  form.reset();
+  update();
+  form.elements.query.focus();
+ };
+ update();
 }
 
 function downloadFinanceReport(){

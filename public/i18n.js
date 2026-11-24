@@ -277,7 +277,16 @@ Record expense|تسجيل المصروف
 Spending by category|الصرف حسب التصنيف
 Entries|عدد البنود
 Total spent|إجمالي الصرف
-Expense entries|بنود المصروفات
+Expense entries|سجل المصروفات
+Find, review or correct entries for the selected period.|دوري على قيد أو راجعيه أو عدّليه للفترة المختارة.
+Search descriptions|بحث في وصف المصروف
+All categories|كل التصنيفات
+Clear filters|إلغاء الفلاتر
+Matching entries|عدد القيود المطابقة
+Filtered spending|إجمالي الصرف بعد الفلترة
+Deducted from profit|المبلغ المخصوم من الربح
+No expenses match these filters.|مفيش مصروفات مطابقة للفلاتر.
+Income tax is a general expense and cannot be linked to a product.|ضريبة الدخل مصروف عام ومش بتترّبط بمنتج.
 Expense|المصروف
 Profit treatment|طريقة الحساب
 Included in product cost|ضمن تكلفة المنتج
