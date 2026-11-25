@@ -113,6 +113,14 @@ Demo data can only be added to an empty store.|البيانات التجريبي
 AI chat is off. Check AI_CHAT_ENABLED and OPENAI_API_KEY on the hosting service.|ردود المساعد متوقفة. راجعي إعدادات AI_CHAT_ENABLED وOPENAI_API_KEY في الاستضافة.
 AI could not complete this reply. Check the hosting logs for the provider error.|المساعد مقدرش يكمل الرد. راجعي سجلات الاستضافة لمعرفة خطأ مزوّد الخدمة.
 AI replies are unavailable on this channel. Check the connection under Social accounts.|الرد الذكي مش متاح على القناة دي. راجعي حالة الربط في حسابات التواصل.
+Test AI connection|اختبار اتصال المساعد
+Checking OpenAI…|جاري اختبار الاتصال بـ OpenAI…
+OpenAI returned a test reply.|OpenAI رجّع رد تجريبي بنجاح.
+Set AI_CHAT_ENABLED to 1 on Render.|اضبطي قيمة AI_CHAT_ENABLED على 1 في Render.
+Add OPENAI_API_KEY on Render.|ضيفي OPENAI_API_KEY في Render.
+Wait a minute before checking again.|استني دقيقة قبل إعادة الاختبار.
+OpenAI returned an empty reply.|OpenAI رجّع رد فاضي.
+Could not get a reply from OpenAI.|مقدرناش نستقبل رد من OpenAI.
 Store policies|سياسات المتجر
 Save assistant information|حفظ معلومات المساعد
 Assistant information saved|تم حفظ معلومات المساعد

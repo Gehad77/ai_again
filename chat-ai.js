@@ -85,6 +85,24 @@ Analyze the conversation and return a short summary without personal contact or 
   reply:clean(parsed.reply,1000),humanReview:replyRequested&&parsed.humanReview,reviewReason:clean(parsed.reviewReason,240)};
 }
 
+const connectionChecks=new Set();
+
+export async function checkAiConnection(){
+ if(process.env.AI_CHAT_ENABLED?.trim()!=='1')return {status:503,error:'Set AI_CHAT_ENABLED to 1 on Render.'};
+ if(!process.env.OPENAI_API_KEY?.trim())return {status:503,error:'Add OPENAI_API_KEY on Render.'};
+ const store=currentStore()?.slug??'legacy';
+ if(connectionChecks.has(store))return {status:429,error:'Wait a minute before checking again.'};
+ connectionChecks.add(store);
+ setTimeout(()=>connectionChecks.delete(store),60000).unref();
+ try{
+  const result=await analyzeChunk([{role:'customer',body:'Hello, is this store chat online?'}],null,[],'EGP','Connection test','',true);
+  if(result.reply)return {status:200,ok:true};
+  return {status:502,error:'OpenAI returned an empty reply.'};
+ }catch(error){
+  return {status:502,error:error instanceof ChatProviderError?error.message:'Could not get a reply from OpenAI.'};
+ }
+}
+
 async function sendSocial(thread,text){
  const token=outboundToken(thread.channel,thread.account);
  if(!token||!version())return false;

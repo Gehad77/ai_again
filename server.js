@@ -1,5 +1,5 @@
 import {createStore,findStore,publicSignupEnabled,storePrefix} from './stores.js';
-import {aiConfigured,queueHistory,replyChannels,startChatWorker} from './chat-ai.js';
+import {aiConfigured,checkAiConnection,queueHistory,replyChannels,startChatWorker} from './chat-ai.js';
 import {socialConfigured,socialWebhook} from './social.js';
 import {currencies,defaultSettings,timeZones,validIncomeTaxRate} from './public/business-model.js';
 import { adminRecoveryStatus, resetWithAccessCode } from './owner-access-code.js';
@@ -113,6 +113,10 @@ async function handle(req,res,url,route){
    return json(res,200,{ok:true});
   }catch(error){await client.query('ROLLBACK');throw error;}
   finally{client.release();}
+ }
+ if(route==='/api/chats/check-ai'&&req.method==='POST'){
+  const {status,...result}=await checkAiConnection();
+  return json(res,status,result);
  }
  if(route==='/api/chats/analyze'&&req.method==='POST'){
   if(!aiConfigured())return json(res,503,{error:'Configure AI chat before analyzing conversations.'});

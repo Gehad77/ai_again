@@ -30,7 +30,7 @@ function integrations(){
  <dl><dt>Text messages</dt><dd>${activity?.messages??0}</dd><dt>Conversation threads</dt><dd>${activity?.conversations??0}</dd></dl></article>`;
  }).join('')}<article class="card integration"><h2>Website</h2>${badge(aiConfigured?'AI replies enabled':'AI replies disabled')}
  <dl><dt>Conversation threads</dt><dd>${state.data.conversations.filter(c=>c.channel==='Website').length}</dd></dl>
- <a href="${workspacePath?workspacePath+'/shop':'/chat'}" target="_blank" rel="noopener">Open website chat ↗</a></article></div>
+ <a href="${workspacePath?workspacePath+'/shop':'/chat'}" target="_blank" rel="noopener">Open website chat ↗</a><div class="dialog-actions"><button type="button" id="check-ai">Test AI connection</button></div><p id="check-ai-status" role="status"></p></article></div>
  <section class="card settings"><h2>Webhook address</h2>
  <div class="webhook-address"><code id="webhook-address" dir="ltr" data-user-content>${esc(location.origin)}/api/social/webhook</code>
  <button id="copy-webhook" type="button">Copy address</button></div>
@@ -270,6 +270,17 @@ const refreshInsights=$('#refresh-insights');
 if(refreshInsights)refreshInsights.onclick=()=>refreshBusiness('Insights refreshed');
 const navToggle=$('#nav-toggle');
 navToggle.onclick=()=>{navToggle.setAttribute('aria-expanded',String(navToggle.getAttribute('aria-expanded')!=='true'));};
+const checkAi=$('#check-ai');
+if(checkAi)checkAi.onclick=async()=>{
+ const status=$('#check-ai-status');
+ checkAi.disabled=true;
+ status.textContent=translate('Checking OpenAI…');
+ try{
+  await api('/api/chats/check-ai',{method:'POST'});
+  status.textContent=translate('OpenAI returned a test reply.');
+ }catch(error){status.textContent=translate(error.message);}
+ finally{checkAi.disabled=false;}
+};
 const copyWebhook=$('#copy-webhook');
 if(copyWebhook)copyWebhook.onclick=async()=>{
  const code=$('#webhook-address');

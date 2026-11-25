@@ -589,3 +589,37 @@ test('owner can populate the empty clothing demo store exactly once',async()=>{
   else process.env.STOREFRONT_SIGNUP_ENABLED=previous;
  }
 });
+
+
+test('AI diagnostics require an owner and report the Responses API status',async()=>{
+ const previous=Object.fromEntries(['AI_CHAT_ENABLED','OPENAI_API_KEY'].map(key=>[key,process.env[key]]));
+ const url=base+'/api/chats/check-ai';
+ const request=cookie=>rawFetch(url,{method:'POST',headers:cookie?{cookie}:{}});
+ try{
+  const unauthenticated=await request();
+  assert.equal(unauthenticated.status,401);
+  const store='/w/men-el-chat-demo';
+  const signIn=await rawFetch(base+store+'/api/auth/signin',{method:'POST',
+   body:JSON.stringify({email:'clothing@example.com',password:'clothing-demo-password'})});
+  const demoCookie=signIn.headers.get('set-cookie').split(';')[0];
+  const check=()=>rawFetch(base+store+'/api/chats/check-ai',{method:'POST',headers:{cookie:demoCookie}});
+  process.env.AI_CHAT_ENABLED='0';
+  assert.equal((await check()).status,503);
+  process.env.AI_CHAT_ENABLED='1';
+  process.env.OPENAI_API_KEY='test-diagnostic-key';
+  globalThis.fetch=async (url,options)=>{
+   assert.equal(url,'https://api.openai.com/v1/responses');
+   assert(!JSON.parse(options.body).input.includes('clothing@example.com'));
+   return new Response(null,{status:403});
+  };
+  const rejected=await check();
+  assert.equal(rejected.status,502);
+  assert.deepEqual(await rejected.json(),{error:'OpenAI Responses HTTP 403'});
+  assert.equal((await check()).status,429);
+ }finally{
+  globalThis.fetch=rawFetch;
+  for(const [key,value] of Object.entries(previous)){
+   if(value===undefined)delete process.env[key];else process.env[key]=value;
+  }
+ }
+});
