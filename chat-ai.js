@@ -3,7 +3,13 @@ import {listStores,metaRoute,metaRoutesConfigured,hasMetaToken} from './stores.j
 
 const intents=['buying','pricing','availability','delivery','support','other'];
 const stages=['new','interested','ready','support'];
-export const aiConfigured=()=>process.env.AI_CHAT_ENABLED==='1'&&Boolean(process.env.OPENAI_API_KEY);
+export const aiConfigured=()=>process.env.AI_CHAT_ENABLED?.trim()==='1'&&Boolean(process.env.OPENAI_API_KEY?.trim());
+
+class ChatProviderError extends Error {
+ constructor(provider,status){
+  super(provider+' HTTP '+status);
+ }
+}
 const tokenNames={WhatsApp:'META_WHATSAPP_ACCESS_TOKEN',Instagram:'META_INSTAGRAM_ACCESS_TOKEN',Messenger:'META_MESSENGER_ACCESS_TOKEN'};
 const version=()=>/^v\d{1,3}\.\d{1,2}$/.test(process.env.META_GRAPH_VERSION??'')?process.env.META_GRAPH_VERSION:null;
 const outboundToken=(channel,account)=>{
@@ -52,7 +58,7 @@ const schema={
 
 async function analyzeChunk(messages,prior,catalog,currency,business,policies,replyRequested,recentMessages=[]){
  const response=await fetch('https://api.openai.com/v1/responses',{
-  method:'POST',headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
+  method:'POST',headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY.trim(),'Content-Type':'application/json'},
   signal:AbortSignal.timeout(45000),
   body:JSON.stringify({
    model:process.env.OPENAI_CHAT_MODEL||'gpt-4.1-mini',store:false,max_output_tokens:900,
@@ -65,7 +71,7 @@ Analyze the conversation and return a short summary without personal contact or 
    text:{format:{type:'json_schema',name:'chat_analysis',strict:true,schema}}
   })
  });
- if(!response.ok){await response.body?.cancel();throw Error('AI request rejected.');}
+ if(!response.ok){await response.body?.cancel();throw new ChatProviderError('OpenAI Responses',response.status);}
  const data=await response.json();
  const output=data.output?.flatMap(item=>item.content??[]).find(item=>item.type==='output_text');
  const parsed=JSON.parse(output?.text??'null');
@@ -91,7 +97,7 @@ async function sendSocial(thread,text){
   body:JSON.stringify(body),signal:AbortSignal.timeout(15000)
  });
  await response.body?.cancel();
- if(!response.ok)throw Error('Social reply rejected.');
+ if(!response.ok)throw new ChatProviderError('Meta '+thread.channel,response.status);
  return true;
 }
 
@@ -137,14 +143,16 @@ export async function processChatJob(){
    prior={intent:result.intent,stage:result.stage,summary:result.summary,themes:result.themes};
   }
   analyzed=Boolean(result);
+  if(canReply&&analyzed&&!result.reply)throw Error('Empty AI reply.');
   if(canReply&&result?.reply){
    const current=await pool.query(`SELECT 1 FROM ai_chat_jobs WHERE conversation_id=$1 AND message_id=$2 AND claimed_at=$3 AND state='working' AND reply_requested=true`,
     [job.conversation_id,job.message_id,job.claim]);
    if(current.rowCount)delivered=context.channel==='Website'||await sendSocial(context,result.reply);
   }
- }catch{
+ }catch(error){
   failed=true;
-  console.error('Chat automation failed; check provider configuration and the conversation.');
+  console.error('Chat automation failed for store %s, conversation %s: %s',currentStore()?.slug??'legacy',job.conversation_id,
+   error instanceof ChatProviderError?error.message:'Could not generate or deliver a reply.');
  }
  const client=await pool.connect();
  try{

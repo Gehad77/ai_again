@@ -68,7 +68,10 @@ const analysisLabel=value=>analysisTerms[value]??value;
 function chatAnalysisCard(id,channel){
  const analysis=state.data.chatAnalysis?.find(row=>row.conversation_id===id);
  const job=state.data.chatJobs?.find(row=>row.conversation_id===id);
- const status=!state.data.aiConfigured?'':job?.state==='failed'?'Needs review':['pending','working'].includes(job?.state)?'Analysis queued':'';
+ const status=!state.data.aiConfigured?'AI chat is off. Check AI_CHAT_ENABLED and OPENAI_API_KEY on the hosting service.':
+  job?.state==='failed'?'AI could not complete this reply. Check the hosting logs for the provider error.':
+  !state.data.replyChannels?.includes(channel)?'AI replies are unavailable on this channel. Check the connection under Social accounts.':
+  ['pending','working'].includes(job?.state)?'Analysis queued':'';
  return `<section class="chat-analysis"><h2>Conversation analysis</h2>
  ${status?`<p>${status}</p>`:''}
  ${analysis?.human_review?`<div class="notice"><strong>Human review required</strong>

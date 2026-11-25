@@ -110,6 +110,9 @@ Load sample products, inventory, paid orders, expenses, and targets in Egyptian 
 Load clothing demo|تحميل بيانات متجر الملابس
 Clothing demo loaded|تم تحميل بيانات متجر الملابس
 Demo data can only be added to an empty store.|البيانات التجريبية بتتضاف لمتجر فاضي بس.
+AI chat is off. Check AI_CHAT_ENABLED and OPENAI_API_KEY on the hosting service.|ردود المساعد متوقفة. راجعي إعدادات AI_CHAT_ENABLED وOPENAI_API_KEY في الاستضافة.
+AI could not complete this reply. Check the hosting logs for the provider error.|المساعد مقدرش يكمل الرد. راجعي سجلات الاستضافة لمعرفة خطأ مزوّد الخدمة.
+AI replies are unavailable on this channel. Check the connection under Social accounts.|الرد الذكي مش متاح على القناة دي. راجعي حالة الربط في حسابات التواصل.
 Store policies|سياسات المتجر
 Save assistant information|حفظ معلومات المساعد
 Assistant information saved|تم حفظ معلومات المساعد
