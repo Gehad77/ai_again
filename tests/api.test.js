@@ -557,3 +557,35 @@ test('storefront orders, customer sessions, social threads and AI policies stay 
   }
  }
 });
+
+test('owner can populate the empty clothing demo store exactly once',async()=>{
+ const previous=process.env.STOREFRONT_SIGNUP_ENABLED;
+ process.env.STOREFRONT_SIGNUP_ENABLED='1';
+ try{
+  const credentials={email:'clothing@example.com',password:'clothing-demo-password'};
+  const send=(path,data,cookie)=>rawFetch(base+path,{
+   method:'POST',body:JSON.stringify(data),headers:cookie?{cookie}:{}
+  });
+  const store='/w/men-el-chat-demo';
+  assert.equal((await send('/api/stores',{name:'Men El Chat Clothing Demo',slug:'men-el-chat-demo',...credentials})).status,201);
+  assert.equal((await send(store+'/api/demo/clothing',{})).status,401);
+  const login=await send(store+'/api/auth/signin',credentials);
+  assert.equal(login.status,200);
+  const demoCookie=login.headers.get('set-cookie').split(';')[0];
+  const load=()=>send(store+'/api/demo/clothing',{},demoCookie);
+  const results=await Promise.all([load(),load()]);
+  assert.deepEqual(results.map(r=>r.status).sort(),[201,409]);
+  const {products}=await (await rawFetch(base+store+'/api/shop/products')).json();
+  assert.equal(products.length,33);
+  assert.deepEqual(new Set(products.map(p=>p.category)),new Set(['هودي','تيشرت','بنطلون']));
+  assert(products.every(p=>p.public_description.includes('المقاس:')&&p.stock>0&&!('unit_cost' in p)));
+  const overview=await (await rawFetch(base+store+'/api/overview',{headers:{cookie:demoCookie}})).json();
+  assert.equal(overview.orders.filter(o=>o.status==='Paid').length,3);
+  assert.match(overview.settings.assistant_notes,/60 جنيه/);
+  const original=await admin.query(`SELECT 1 FROM ${schema}.products WHERE category=$1`,['هودي']);
+  assert.equal(original.rowCount,0);
+ }finally{
+  if(previous===undefined)delete process.env.STOREFRONT_SIGNUP_ENABLED;
+  else process.env.STOREFRONT_SIGNUP_ENABLED=previous;
+ }
+});

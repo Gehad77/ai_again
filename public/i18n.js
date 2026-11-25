@@ -105,6 +105,11 @@ Review orders from the storefront and connected conversations.|تابعي الط
 No orders yet.|مفيش طلبات لسه.
 Assistant information|معلومات المساعد
 Add shipping, payments, returns and approved answers for this store. Use public business information only.|ضيفي الشحن والدفع والاسترجاع والردود المعتمدة للمتجر. اكتبي معلومات عامة عن النشاط.
+Clothing store demo|متجر ملابس تجريبي
+Load sample products, inventory, paid orders, expenses, and targets in Egyptian pounds.|ضيفي منتجات ومخزون وطلبات مدفوعة ومصروفات وأهداف تجريبية بالجنيه المصري.
+Load clothing demo|تحميل بيانات متجر الملابس
+Clothing demo loaded|تم تحميل بيانات متجر الملابس
+Demo data can only be added to an empty store.|البيانات التجريبية بتتضاف لمتجر فاضي بس.
 Store policies|سياسات المتجر
 Save assistant information|حفظ معلومات المساعد
 Assistant information saved|تم حفظ معلومات المساعد

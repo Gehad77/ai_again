@@ -1,4 +1,5 @@
-import { pool } from './db.js';
+import { currentStore, pool } from './db.js';
+import { demoClothingSlug, loadClothingDemo } from './demo-clothing.js';
 import { validStockCount, isMoney, isDate, expenseEntry, isTargetPeriod, stockChange } from './public/business-model.js';
 
 export async function recordSale(client, order, product) {
@@ -11,6 +12,26 @@ export async function recordSale(client, order, product) {
 }
 
 export async function businessRoutes(req, res, route, {body, invalid, json}) {
+  if(route==='/api/demo/clothing'&&req.method==='POST'&&currentStore()?.slug===demoClothingSlug){
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      await client.query('LOCK TABLE products, operating_expenses, sales_targets, workspace_settings IN SHARE ROW EXCLUSIVE MODE');
+      const {rows:[{occupied}]}=await client.query(`SELECT EXISTS(SELECT 1 FROM products)
+        OR EXISTS(SELECT 1 FROM operating_expenses) OR EXISTS(SELECT 1 FROM sales_targets)
+        OR EXISTS(SELECT 1 FROM workspace_settings WHERE assistant_notes<>'') AS occupied`);
+      if(occupied){
+        await client.query('ROLLBACK');
+        return json(res,409,{error:'Demo data can only be added to an empty store.'});
+      }
+      await loadClothingDemo(client,recordSale);
+      await client.query('COMMIT');
+      return json(res,201,{ok:true});
+    }catch(error){
+      await client.query('ROLLBACK');
+      throw error;
+    }finally{client.release();}
+  }
   const product = route.match(/^\/api\/products\/(\d{1,10})(\/stock)?$/);
   if (product && Number(product[1]) > 2147483647) invalid('Invalid product.');
   if ((route === '/api/products' && req.method === 'POST') ||

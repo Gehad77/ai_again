@@ -51,6 +51,7 @@ function settings(){
  <p id="currency-change-note" hidden><label><span><input name="confirm" type="checkbox"> I confirm the currency applies to existing records.</span></label>
  <small>Existing amounts retain their numbers and are shown in the selected currency. No exchange-rate conversion is applied.</small></p>
  <button class="primary">Save settings</button><p role="alert" class="form-error"></p></form></section>
+ ${workspacePath==='/w/men-el-chat-demo'&&!state.data.products.length?'<section class="card recent settings"><h2>Clothing store demo</h2><p>Load sample products, inventory, paid orders, expenses, and targets in Egyptian pounds.</p><button type="button" class="primary" id="load-clothing-demo">Load clothing demo</button><p class="form-error" role="alert"></p></section>':''}
  <section class="card recent settings"><h2>Assistant information</h2>
  <p>Add shipping, payments, returns and approved answers for this store. Use public business information only.</p>
  <form id="assistant-settings" class="business-form"><label>Store policies<textarea name="notes" maxlength="5000" rows="6">${esc(prefs.assistant_notes??'')}</textarea></label>
@@ -308,6 +309,14 @@ if(state.page==='taxes'){
 }
 if(state.page==='customers')loadCustomerAccounts();
 if(state.page==='settings'){
+ const demo=$('#load-clothing-demo');
+ if(demo)demo.onclick=async()=>{
+  demo.disabled=true;
+  try{
+   await api('/api/demo/clothing',{method:'POST',body:'{}'});
+   await refreshBusiness('Clothing demo loaded');
+  }catch(error){demo.nextElementSibling.textContent=error.message;demo.disabled=false;}
+ };
  const assistant=$('#assistant-settings');
  assistant.onsubmit=async event=>{
   event.preventDefault();
