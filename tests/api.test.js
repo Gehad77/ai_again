@@ -213,19 +213,26 @@ test('unified inbox analyzes all four channels and sends only one configured rep
    assert.equal((await rawFetch(base+'/api/social/webhook',{method:'POST',body,headers:{'x-hub-signature-256':signature}})).status,200);
    assert(await processChatJob());
   };
+  await postMessenger('pricing-followup','What about the second one?');
+  const followup=inputs.at(-1);
+  assert.deepEqual(followup.recentMessages,[
+   {role:'customer',body:'Messenger pricing?'},
+   {role:'assistant',body:'Thanks for your message.'},
+   {role:'customer',body:'What about the second one?'}
+  ]);
   const thread=data.conversations.find(c=>c.name==='Messenger · 904');
   const sent=()=>deliveries.filter(entry=>entry.url.includes('/804/')).length;
   await postMessenger('refund-case','Refund dispute');
   const {chatAnalysis}=await (await fetch(base+'/api/overview')).json();
   assert.equal(chatAnalysis.find(row=>row.conversation_id===thread.id).human_review,true);
   await postMessenger('followup-held','Still waiting');
-  assert.equal(sent(),2);
+  assert.equal(sent(),3);
   const resume=base+'/api/chats/'+thread.id+'/resume-ai';
   assert.equal((await rawFetch(resume,{method:'POST'})).status,401);
   assert.equal((await fetch(resume,{method:'POST'})).status,200);
   assert.equal(await processChatJob(),false);
   await postMessenger('followup-resumed','How much?');
-  assert.equal(sent(),3);
+  assert.equal(sent(),4);
  }finally{
   globalThis.fetch=rawFetch;
   for(const key of Object.keys(env))delete process.env[key];
@@ -482,7 +489,7 @@ test('storefront orders, customer sessions, social threads and AI policies stay 
    assert(login.headers.get('set-cookie').includes('Path=/w/'+slug));
    const owner=sessionCookie(login);
    assert.equal((await request(path+'/settings/assistant','PUT',{notes:policy},owner)).status,200);
-   const product=await request(path+'/products','POST',{name:item,category:'Test',price:25,unit_cost:10,stock:6},owner);
+   const product=await request(path+'/products','POST',{name:item,category:'Test',public_description:item+' material',price:25,unit_cost:10,stock:6},owner);
    assert.equal(product.status,201);
    assert.equal((await product.json()).id,1000);
    const signupBuyer=await request(path+'/shop/signup','POST',{name:name+' buyer',email:'buyer@example.com',password:'buyer-password-123'});
@@ -491,6 +498,7 @@ test('storefront orders, customer sessions, social threads and AI policies stay 
    const buyer=sessionCookie(signupBuyer);
    const publicCatalog=await(await request(path+'/shop/products')).json();
    assert.deepEqual(publicCatalog.products.map(p=>p.name),[item]);
+   assert.equal(publicCatalog.products[0].public_description,item+' material');
    assert(!('unit_cost' in publicCatalog.products[0]));
    stores.push({slug,owner,buyer,path,item,policy});
   }
@@ -533,6 +541,7 @@ test('storefront orders, customer sessions, social threads and AI policies stay 
    await inStore(await findStore(store.slug),async()=>{assert(await processChatJob());});
    assert.deepEqual(inputs.map(input=>input.catalog.map(product=>product.name)),[[store.item]]);
    assert.equal(inputs[0].policies,store.policy);
+   assert.equal(inputs[0].catalog[0].public_description,store.item+' material');
    assert.equal(deliveries.length,1);
    assert.equal(deliveries[0].token,index===0?'Bearer alpha-token':'Bearer beta-token');
    assert(deliveries[0].url.includes(index===0?'/1101/':'/1102/'));

@@ -11,7 +11,7 @@ export async function customerRoutes(req,res,route,h){
  const cookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(prefix))?.slice(prefix.length)||'';
  const customer=(await pool.query('SELECT c.id,c.name,c.conversation_id FROM customer_sessions s JOIN customers c ON c.id=s.customer_id WHERE s.token=$1 AND s.expires_at>NOW()',[digest(cookie)])).rows[0];
  if(route==='/api/shop/session'&&req.method==='GET')return reply(200,{customer:customer||null});
- if(route==='/api/shop/products'&&req.method==='GET')return reply(200,{products:(await pool.query('SELECT id,name,category,price,stock,emoji FROM products ORDER BY id')).rows});
+ if(route==='/api/shop/products'&&req.method==='GET')return reply(200,{products:(await pool.query('SELECT id,name,category,public_description,price,stock,emoji FROM products ORDER BY id')).rows});
  if(['/api/shop/signup','/api/shop/signin'].includes(route)&&req.method==='POST'){
  const p=await body(req);const email=typeof p.email==='string'?p.email.trim().toLowerCase():'';
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof p.password!=='string'||p.password.length<12||p.password.length>128)invalid('Use a valid email and a password of 12–128 characters.');

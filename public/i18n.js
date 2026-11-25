@@ -265,6 +265,9 @@ You|أنتِ
 Order assistant|مساعد الطلبات
 Product|المنتج
 Product name|اسم المنتج
+Public product description|وصف المنتج للعملاء
+Describe materials, sizes, colors, and uses. Customers and the AI assistant can see this.|اكتبي الخامة والمقاسات والألوان والاستخدامات. الوصف بيظهر للعميل والمساعد الذكي بيستخدمه.
+Use up to 1,000 characters for the public product description.|اكتبي وصف المنتج في ١٠٠٠ حرف بحد أقصى.
 Category|التصنيف
 Stock|المخزون
 Stock quantity|كمية المخزون

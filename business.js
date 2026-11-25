@@ -21,6 +21,10 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
         !isMoney(p.price) || (p.unit_cost != null && !isMoney(p.unit_cost))) {
       invalid('Enter a valid name, category, price and unit cost.');
     }
+    if(p.public_description!==undefined&&(typeof p.public_description!=='string'||p.public_description.length>1000)) {
+      invalid('Use up to 1,000 characters for the public product description.');
+    }
+    const description=p.public_description?.trim();
     const threshold=p.stock_alert_threshold;
     const desired=p.desired_stock;
     if(desired!=null&&!validStockCount(desired))invalid('Enter a whole-number desired stock level.');
@@ -31,20 +35,21 @@ export async function businessRoutes(req, res, route, {body, invalid, json}) {
       const result = await pool.query(
         `UPDATE products SET name=$1,category=$2,price=$3,unit_cost=$4,
           stock_alert_threshold=CASE WHEN $7 THEN $6 ELSE stock_alert_threshold END,
-          desired_stock=CASE WHEN $9 THEN $8 ELSE desired_stock END WHERE id=$5 RETURNING *`,
-        [...fields, product[1], threshold??null, threshold!==undefined, desired??null, desired!==undefined]
+          desired_stock=CASE WHEN $9 THEN $8 ELSE desired_stock END,
+          public_description=COALESCE($10,public_description) WHERE id=$5 RETURNING *`,
+        [...fields, product[1], threshold??null, threshold!==undefined, desired??null, desired!==undefined, description??null]
       );
       return json(res, result.rowCount ? 200 : 404, result.rows[0] ?? {error:'Product not found.'});
     }
     if (!validStockCount(p.stock)) invalid('Enter valid opening stock.');
     const result = await pool.query(`
       WITH added AS (
-        INSERT INTO products(id,name,category,price,unit_cost,stock,emoji,color,stock_alert_threshold,desired_stock)
-        VALUES(nextval('product_ids'),$1,$2,$3,$4,$5,'◇','#e5eee6',$6,$7) RETURNING *
+        INSERT INTO products(id,name,category,price,unit_cost,stock,emoji,color,stock_alert_threshold,desired_stock,public_description)
+        VALUES(nextval('product_ids'),$1,$2,$3,$4,$5,'◇','#e5eee6',$6,$7,$8) RETURNING *
       ), movement AS (
         INSERT INTO stock_movements(product_id,delta,stock_after,kind,unit_cost)
         SELECT id,stock,stock,'opening',unit_cost FROM added WHERE stock>0
-      ) SELECT * FROM added`, [...fields, p.stock, threshold??null, desired??null]);
+      ) SELECT * FROM added`, [...fields, p.stock, threshold??null, desired??null, description??'']);
     return json(res, 201, result.rows[0]);
   }
   if (product?.[2] && req.method === 'POST') {
