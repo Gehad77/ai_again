@@ -27,6 +27,15 @@ after(async()=>{
  await admin.query(`DROP SCHEMA ${schema} CASCADE`);
  await admin.end();
 });
+test('privacy policy is readable without an account',async()=>{
+ const response=await rawFetch(base+'/privacy');
+ assert.equal(response.status,200);
+ assert.match(response.headers.get('content-type'),/text\/html/);
+ const policy=await response.text();
+ assert.match(policy,/lang="ar" dir="rtl"/);
+ assert.match(policy,/سياسة الخصوصية لمن الشات/);
+ assert.match(policy,/طلب حذف بيانات/);
+});
 test('workspace returns seeded conversations and inventory',async()=>{const r=await fetch(base+'/api/overview');assert.equal(r.status,200);const d=await r.json();assert.equal(d.conversations.length,6);assert.equal(d.products.length,4);assert.equal(d.demo,true);});
 test('reply persists and conversion status updates',async()=>{let r=await fetch(base+'/api/conversations/1/messages',{method:'POST',body:JSON.stringify({body:'Olive is available. Would you like to order?'})});assert.equal(r.status,201);let msgs=await(await fetch(base+'/api/conversations/1')).json();assert.equal(msgs.at(-1).role,'agent');assert.match(msgs.at(-1).body,/Olive/);r=await fetch(base+'/api/conversations/1',{method:'PATCH',body:JSON.stringify({status:'Converted'})});assert.equal(r.status,200);const d=await(await fetch(base+'/api/overview')).json();assert.equal(d.conversations[0].status,'Converted');});
 test('rejects invalid payloads and missing conversations',async()=>{for(const body of ['{',JSON.stringify({body:''})]){const r=await fetch(base+'/api/conversations/1/messages',{method:'POST',body});assert.equal(r.status,400);}assert.equal((await fetch(base+'/api/conversations/999')).status,404);assert.equal((await fetch(base+'/api/conversations/1',{method:'PATCH',body:JSON.stringify({status:'nonsense'})})).status,400);});
